@@ -70,12 +70,12 @@ from cStringIO import StringIO
 
 
 #additional library:
-import numpy as N
+import numpy as np
 
 
 #constants:
 dynecm = 1e-7
-pi = N.pi
+pi = np.pi
 
 epsilon = 1e-13
 
@@ -131,20 +131,20 @@ def wrap(text, line_length=80):
 
 def basis_switcher(in_system, out_system):
     from_ned = {
-        'NED': N.matrix( [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=N.float ),
-        'USE': N.matrix( [[0.,-1.,0.],[0.,0.,1.],[-1.,0.,0.]], dtype=N.float ).I,
-        'XYZ': N.matrix( [[0.,1.,0.],[1.,0.,0.],[0.,0.,-1.]], dtype=N.float ).I,
-        'NWU': N.matrix( [[1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]], dtype=N.float ).I }
+        'NED': np.matrix( [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float ),
+        'USE': np.matrix( [[0.,-1.,0.],[0.,0.,1.],[-1.,0.,0.]], dtype=np.float ).I,
+        'XYZ': np.matrix( [[0.,1.,0.],[1.,0.,0.],[0.,0.,-1.]], dtype=np.float ).I,
+        'NWU': np.matrix( [[1.,0.,0.],[0.,-1.,0.],[0.,0.,-1.]], dtype=np.float ).I }
 
     return from_ned[in_system].I * from_ned[out_system]
 
 def basis_transform_matrix(m, in_system, out_system):
     r = basis_switcher(in_system, out_system)
-    return N.dot(r, N.dot(m, r.I))
+    return np.dot(r, np.dot(m, r.I))
 
 def basis_transform_vector(v, in_system, out_system):
     r = basis_switcher(in_system, out_system)
-    return N.dot(r, v)
+    return np.dot(r, v)
 
 class MopadHelpFormatter(optparse.IndentedHelpFormatter):
 
@@ -209,15 +209,15 @@ def euler_to_matrix( alpha, beta, gamma ):
     sb = math.sin(beta)
     sg = math.sin(gamma)
 
-    mat = N.matrix( [[cb*cg-ca*sb*sg,  sb*cg+ca*cb*sg,  sa*sg],
+    mat = np.matrix( [[cb*cg-ca*sb*sg,  sb*cg+ca*cb*sg,  sa*sg],
                        [-cb*sg-ca*sb*cg, -sb*sg+ca*cb*cg, sa*cg],
-                       [sa*sb,           -sa*cb,          ca]], dtype=N.float )
+                       [sa*sb,           -sa*cb,          ca]], dtype=np.float )
     return mat
 
 
 class MomentTensor:
 
-    _m_unrot = N.matrix( [[0.,0.,-1.],[0.,0.,0.],[-1.,0.,0.]], dtype=N.float )
+    _m_unrot = np.matrix( [[0.,0.,-1.],[0.,0.,0.],[-1.,0.,0.]], dtype=np.float )
 
     def __init__(self, M=None, in_system='NED', out_system='NED', debug=0):
         """
@@ -343,15 +343,15 @@ class MomentTensor:
             mech  = mech[0]
 
         # all 9 elements are given
-        if N.prod(N.shape(mech)) == 9:
-            if N.shape(mech)[0] == 3:
+        if np.prod(np.shape(mech)) == 9:
+            if np.shape(mech)[0] == 3:
                 #assure symmetry:
                 mech[1,0] = mech[0,1]
                 mech[2,0] = mech[0,2]
                 mech[2,1] = mech[1,2]
                 new_M     = mech
             else:
-                new_M     = N.array(mech).reshape(3,3).copy()
+                new_M     = np.array(mech).reshape(3,3).copy()
                 new_M[1,0]= new_M[0,1]
                 new_M[2,0]= new_M[0,2]
                 new_M[2,1]= new_M[1,2]
@@ -360,7 +360,7 @@ class MomentTensor:
         # mechanism given as 6- or 7-tuple, list or array
         elif len(mech) == 6 or len(mech) == 7:
             M        = mech
-            new_M    = N.matrix( N.array([M[0],M[3],M[4],M[3],M[1],M[5],M[4], M[5],M[2] ]).reshape(3,3) )
+            new_M    = np.matrix( np.array([M[0],M[3],M[4],M[3],M[1],M[5],M[4], M[5],M[2] ]).reshape(3,3) )
 
             if len(mech) == 7 :
                 new_M    = M[6] * new_M
@@ -378,7 +378,7 @@ class MomentTensor:
             #to assure right basis system - others are meaningless, provided these angles
             input_basis   =   'NED'
 
-        return  basis_transform_matrix(N.matrix(new_M), input_basis, 'NED')
+        return  basis_transform_matrix(np.matrix(new_M), input_basis, 'NED')
 
 
 
@@ -432,8 +432,8 @@ class MomentTensor:
         M      = self._M
 
         #isotropic part
-        M_iso   = N.diag( N.array([1./3*N.trace(M),1./3*N.trace(M),1./3*N.trace(M)] ) )
-        M0_iso  = abs(1./3*N.trace(M))
+        M_iso   = np.diag( np.array([1./3*np.trace(M),1./3*np.trace(M),1./3*np.trace(M)] ) )
+        M0_iso  = abs(1./3*np.trace(M))
 
         #deviatoric part
         M_devi  = M - M_iso
@@ -442,25 +442,25 @@ class MomentTensor:
         self._deviatoric = M_devi
 
         #eigenvalues and -vectors
-        eigenwtot,eigenvtot  = N.linalg.eig(M_devi)
+        eigenwtot,eigenvtot  = np.linalg.eig(M_devi)
 
         #eigenvalues and -vectors of the deviatoric part
-        eigenw1,eigenv1  = N.linalg.eig(M_devi)
+        eigenw1,eigenv1  = np.linalg.eig(M_devi)
 
         #eigenvalues in ascending order:
-        eigenw           = N.real( N.take( eigenw1,N.argsort(abs(eigenwtot)) ) )
-        eigenv           = N.real( N.take( eigenv1,N.argsort(abs(eigenwtot)) ,1 ) )
+        eigenw           = np.real( np.take( eigenw1,np.argsort(abs(eigenwtot)) ) )
+        eigenv           = np.real( np.take( eigenv1,np.argsort(abs(eigenwtot)) ,1 ) )
 
         #eigenvalues in ascending order in absolute value!!:
-        eigenw_devi           = N.real( N.take( eigenw1,N.argsort(abs(eigenw1)) ) )
-        eigenv_devi           = N.real( N.take( eigenv1,N.argsort(abs(eigenw1)) ,1 ) )
+        eigenw_devi           = np.real( np.take( eigenw1,np.argsort(abs(eigenw1)) ) )
+        eigenv_devi           = np.real( np.take( eigenv1,np.argsort(abs(eigenw1)) ,1 ) )
 
         M0_devi          = max(abs(eigenw_devi))
 
         #named according to Jost & Herrmann:
-        a1 = eigenv[:,0]#/N.linalg.norm(eigenv[:,0])
-        a2 = eigenv[:,1]#/N.linalg.norm(eigenv[:,1])
-        a3 = eigenv[:,2]#/N.linalg.norm(eigenv[:,2])
+        a1 = eigenv[:,0]#/np.linalg.norm(eigenv[:,0])
+        a2 = eigenv[:,1]#/np.linalg.norm(eigenv[:,1])
+        a3 = eigenv[:,2]#/np.linalg.norm(eigenv[:,2])
 
         # if only isotropic part exists:
         if M0_devi < epsilon:
@@ -469,11 +469,11 @@ class MomentTensor:
             F           = -eigenw_devi[0]/eigenw_devi[2]
 
 
-        M_DC        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_CLVD      = N.matrix(N.zeros((9),float)).reshape(3,3)
+        M_DC        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_CLVD      = np.matrix(np.zeros((9),float)).reshape(3,3)
 
-        M_DC        = eigenw[2]*(1-2*F)*( N.outer(a3,a3) - N.outer(a2,a2) )
-        M_CLVD      = M_devi - M_DC #eigenw[2]*F*( 2*N.outer(a3,a3) - N.outer(a2,a2) - N.outer(a1,a1))
+        M_DC        = eigenw[2]*(1-2*F)*( np.outer(a3,a3) - np.outer(a2,a2) )
+        M_CLVD      = M_devi - M_DC #eigenw[2]*F*( 2*np.outer(a3,a3) - np.outer(a2,a2) - np.outer(a1,a1))
 
 
         #according to Bowers & Hudson:
@@ -490,9 +490,9 @@ class MomentTensor:
         self._CLVD          =  M_CLVD
         self._DC_percentage =  M_DC_percentage
 
-        #self._seismic_moment   = N.sqrt(1./2*N.sum(eigenw**2) )
+        #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment   = M0
-        self._moment_magnitude = N.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
+        self._moment_magnitude = np.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
 
     #---------------------------------------------------------------
     def _decomposition_w_2DC(self):
@@ -517,8 +517,8 @@ class MomentTensor:
         M      = self._M
 
         #isotropic part
-        M_iso   = N.diag( N.array([1./3*N.trace(M),1./3*N.trace(M),1./3*N.trace(M)] ) )
-        M0_iso  = abs(1./3*N.trace(M))
+        M_iso   = np.diag( np.array([1./3*np.trace(M),1./3*np.trace(M),1./3*np.trace(M)] ) )
+        M0_iso  = abs(1./3*np.trace(M))
 
         #deviatoric part
         M_devi  = M - M_iso
@@ -527,12 +527,12 @@ class MomentTensor:
         self._deviatoric = M_devi
 
         #eigenvalues and -vectors of the deviatoric part
-        eigenw1,eigenv1  = N.linalg.eig(M_devi)
+        eigenw1,eigenv1  = np.linalg.eig(M_devi)
 
 
         #eigenvalues in ascending order of their absolute values:
-        eigenw           = N.real( N.take( eigenw1,N.argsort(abs(eigenw1)) ) )
-        eigenv           = N.real( N.take( eigenv1,N.argsort(abs(eigenw1)) ,1 ) )
+        eigenw           = np.real( np.take( eigenw1,np.argsort(abs(eigenw1)) ) )
+        eigenv           = np.real( np.take( eigenv1,np.argsort(abs(eigenw1)) ,1 ) )
 
         M0_devi          = max(abs(eigenw))
 
@@ -542,11 +542,11 @@ class MomentTensor:
         a3 = eigenv[:,2]
 
 
-        M_DC        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_DC2       = N.matrix(N.zeros((9),float)).reshape(3,3)
+        M_DC        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_DC2       = np.matrix(np.zeros((9),float)).reshape(3,3)
 
-        M_DC        = eigenw[2]*( N.outer(a3,a3) - N.outer(a2,a2) )
-        M_DC2       = eigenw[0]*( N.outer(a1,a1) - N.outer(a2,a2) )
+        M_DC        = eigenw[2]*( np.outer(a3,a3) - np.outer(a2,a2) )
+        M_DC2       = eigenw[0]*( np.outer(a1,a1) - np.outer(a2,a2) )
 
         M_DC_percentage = abs(eigenw[2]/(abs(eigenw[2])+abs(eigenw[0]) )     )
 
@@ -561,9 +561,9 @@ class MomentTensor:
         self._iso_percentage = M_iso_percentage
 
 
-        #self._seismic_moment   = N.sqrt(1./2*N.sum(eigenw**2) )
+        #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment   = M0
-        self._moment_magnitude = N.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
+        self._moment_magnitude = np.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
 
     #---------------------------------------------------------------
     def _decomposition_w_CLVD_2DC(self):
@@ -595,8 +595,8 @@ class MomentTensor:
         M      = self._M
 
         #isotropic part
-        M_iso   = N.diag( N.array([1./3*N.trace(M),1./3*N.trace(M),1./3*N.trace(M)] ) )
-        M0_iso  = abs(1./3*N.trace(M))
+        M_iso   = np.diag( np.array([1./3*np.trace(M),1./3*np.trace(M),1./3*np.trace(M)] ) )
+        M0_iso  = abs(1./3*np.trace(M))
 
         #deviatoric part
         M_devi  = M - M_iso
@@ -604,9 +604,9 @@ class MomentTensor:
         self._isotropic  = M_iso
         self._deviatoric = M_devi
 
-        M_DC1        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_DC2        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_CLVD       = N.matrix(N.zeros((9),float)).reshape(3,3)
+        M_DC1        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_DC2        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_CLVD       = np.matrix(np.zeros((9),float)).reshape(3,3)
 
         M_DC1[0,0]   = -0.5*(M[1,1]-M[0,0])
         M_DC1[1,1]   = 0.5*(M[1,1]-M[0,0])
@@ -615,7 +615,7 @@ class MomentTensor:
         M_DC2[0,2]   = M_DC2[2,0]   = M[0,2]
         M_DC2[1,2]   = M_DC2[2,1]   = M[1,2]
 
-        M_CLVD       =  1./3.*(0.5*(M[1,1]+M[0,0])-M[2,2])*N.diag( N.array([1.,1.,-2.] ) )
+        M_CLVD       =  1./3.*(0.5*(M[1,1]+M[0,0])-M[2,2])*np.diag( np.array([1.,1.,-2.] ) )
 
         M_DC         =  M_DC1 + M_DC2
 
@@ -627,18 +627,18 @@ class MomentTensor:
         self._DC2_percentage=  M_DC2_perc
 
         #according to Bowers & Hudson:
-        eigvals_M, dummy_vecs      =  N.linalg.eig(M)
-        eigvals_M_devi, dummy_vecs =  N.linalg.eig(M_devi)
-        eigvals_M_iso, dummy_iso   =  N.linalg.eig(M_iso)
-        eigvals_M_clvd, dummy_vecs =  N.linalg.eig(M_CLVD)
-        eigvals_M_dc1, dummy_vecs  =  N.linalg.eig(M_DC1)
-        eigvals_M_dc2, dummy_vecs  =  N.linalg.eig(M_DC2)
+        eigvals_M, dummy_vecs      =  np.linalg.eig(M)
+        eigvals_M_devi, dummy_vecs =  np.linalg.eig(M_devi)
+        eigvals_M_iso, dummy_iso   =  np.linalg.eig(M_iso)
+        eigvals_M_clvd, dummy_vecs =  np.linalg.eig(M_CLVD)
+        eigvals_M_dc1, dummy_vecs  =  np.linalg.eig(M_DC1)
+        eigvals_M_dc2, dummy_vecs  =  np.linalg.eig(M_DC2)
 
-        #M0_M        = N.max(N.abs(eigvals_M - 1./3*N.sum(eigvals_M)   ))
-        M0_M_iso    = N.max(N.abs(eigvals_M_iso - 1./3*N.sum(eigvals_M)   ))
-        M0_M_clvd   = N.max(N.abs(eigvals_M_clvd - 1./3*N.sum(eigvals_M)   ))
-        M0_M_dc1    = N.max(N.abs(eigvals_M_dc1 - 1./3*N.sum(eigvals_M)   ))
-        M0_M_dc2    = N.max(N.abs(eigvals_M_dc2 - 1./3*N.sum(eigvals_M)   ))
+        #M0_M        = np.max(np.abs(eigvals_M - 1./3*np.sum(eigvals_M)   ))
+        M0_M_iso    = np.max(np.abs(eigvals_M_iso - 1./3*np.sum(eigvals_M)   ))
+        M0_M_clvd   = np.max(np.abs(eigvals_M_clvd - 1./3*np.sum(eigvals_M)   ))
+        M0_M_dc1    = np.max(np.abs(eigvals_M_dc1 - 1./3*np.sum(eigvals_M)   ))
+        M0_M_dc2    = np.max(np.abs(eigvals_M_dc2 - 1./3*np.sum(eigvals_M)   ))
         M0_M_dc     = M0_M_dc1 + M0_M_dc2
         M0_M_devi   = M0_M_clvd + M0_M_dc
 
@@ -656,9 +656,9 @@ class MomentTensor:
 
 
 
-        #self._seismic_moment   = N.sqrt(1./2*N.sum(eigenw**2) )
+        #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment   = M0_M
-        self._moment_magnitude = N.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
+        self._moment_magnitude = np.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
 
     #---------------------------------------------------------------
     def _decomposition_w_3DC(self):
@@ -684,8 +684,8 @@ class MomentTensor:
         M      = self._M
 
         #isotropic part
-        M_iso   = N.diag( N.array([1./3*N.trace(M),1./3*N.trace(M),1./3*N.trace(M)] ) )
-        M0_iso  = abs(1./3*N.trace(M))
+        M_iso   = np.diag( np.array([1./3*np.trace(M),1./3*np.trace(M),1./3*np.trace(M)] ) )
+        M0_iso  = abs(1./3*np.trace(M))
 
         #deviatoric part
         M_devi  = M - M_iso
@@ -694,16 +694,16 @@ class MomentTensor:
         self._deviatoric = M_devi
 
         #eigenvalues and -vectors of the deviatoric part
-        eigenw1,eigenv1  = N.linalg.eig(M_devi)
+        eigenw1,eigenv1  = np.linalg.eig(M_devi)
         M0_devi          = max(abs(eigenw1))
 
         #eigenvalues and -vectors of the full M !!!!!!!!
-        eigenw1,eigenv1  = N.linalg.eig(M)
+        eigenw1,eigenv1  = np.linalg.eig(M)
 
 
         #eigenvalues in ascending order of their absolute values:
-        eigenw           = N.real( N.take( eigenw1,N.argsort(abs(eigenw1)) ) )
-        eigenv           = N.real( N.take( eigenv1,N.argsort(abs(eigenw1)) ,1 ) )
+        eigenw           = np.real( np.take( eigenw1,np.argsort(abs(eigenw1)) ) )
+        eigenv           = np.real( np.take( eigenv1,np.argsort(abs(eigenw1)) ,1 ) )
 
 
         #named according to Jost & Herrmann:
@@ -712,13 +712,13 @@ class MomentTensor:
         a3 = eigenv[:,2]
 
 
-        M_DC1        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_DC2        = N.matrix(N.zeros((9),float)).reshape(3,3)
-        M_DC3        = N.matrix(N.zeros((9),float)).reshape(3,3)
+        M_DC1        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_DC2        = np.matrix(np.zeros((9),float)).reshape(3,3)
+        M_DC3        = np.matrix(np.zeros((9),float)).reshape(3,3)
 
-        M_DC1        = 1./3.*(eigenw[0] - eigenw[1]) *( N.outer(a1,a1) - N.outer(a2,a2) )
-        M_DC2        = 1./3.*(eigenw[1] - eigenw[2]) *( N.outer(a2,a2) - N.outer(a3,a3) )
-        M_DC3        = 1./3.*(eigenw[2] - eigenw[0]) *( N.outer(a3,a3) - N.outer(a1,a1) )
+        M_DC1        = 1./3.*(eigenw[0] - eigenw[1]) *( np.outer(a1,a1) - np.outer(a2,a2) )
+        M_DC2        = 1./3.*(eigenw[1] - eigenw[2]) *( np.outer(a2,a2) - np.outer(a3,a3) )
+        M_DC3        = 1./3.*(eigenw[2] - eigenw[0]) *( np.outer(a3,a3) - np.outer(a1,a1) )
 
         M_DC1_perc = int(100*abs((eigenw[0]-eigenw[1]))/ (abs((eigenw[1]-eigenw[2]))+abs((eigenw[1]-eigenw[2]))+abs((eigenw[2]-eigenw[0]))))
         M_DC2_perc = int(100*abs((eigenw[1]-eigenw[2]))/ (abs((eigenw[1]-eigenw[2]))+abs((eigenw[1]-eigenw[2]))+abs((eigenw[2]-eigenw[0]))))
@@ -737,9 +737,9 @@ class MomentTensor:
         self._iso_percentage = M_iso_percentage
 
 
-        #self._seismic_moment   = N.sqrt(1./2*N.sum(eigenw**2) )
+        #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment   = M0
-        self._moment_magnitude = N.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
+        self._moment_magnitude = np.log10(self._seismic_moment*1.0e7)/1.5 - 10.7
 
     #---------------------------------------------------------------
 
@@ -778,29 +778,29 @@ class MomentTensor:
         # - auxiliary axis H ('help') belongs to remaining EW (T- or P-axis)
         
         #EW sorting from lowest to highest value
-        EW_devi, EV_devi = N.linalg.eigh( M_devi )
-        EW_order = N.argsort(EW_devi)
+        EW_devi, EV_devi = np.linalg.eigh( M_devi )
+        EW_order = np.argsort(EW_devi)
 
         #print 'order',EW_order
 
         if 1:#self._plot_isotropic_part:
-            trace_M = N.trace(M)
+            trace_M = np.trace(M)
             if abs(trace_M) < epsilon:
                 trace_M = 0
-            EW, EV = N.linalg.eigh( M )
+            EW, EV = np.linalg.eigh( M )
             for i,ew in enumerate(EW):
                 if abs(EW[i]) < epsilon:
                     EW[i] = 0
         else:
-            trace_M = N.trace(M_devi)
+            trace_M = np.trace(M_devi)
             if abs(trace_M) < epsilon:
                 trace_M = 0
 
-            EW, EV = N.linalg.eigh( M_devi )
+            EW, EV = np.linalg.eigh( M_devi )
             for i,ew in enumerate(EW):
                 if abs(EW[i]) < epsilon:
                     EW[i] = 0
-        trace_M_devi =   N.trace(M_devi)
+        trace_M_devi =   np.trace(M_devi)
 
 
         EW1_devi = EW_devi[EW_order[0]]
@@ -818,11 +818,11 @@ class MomentTensor:
         EV2 = EV[:,EW_order[1]]
         EV3 = EV[:,EW_order[2]]
 
-        chng_basis_tmp    =  N.matrix(N.zeros((3,3)))
+        chng_basis_tmp    =  np.matrix(np.zeros((3,3)))
         chng_basis_tmp[:,0] = EV1_devi
         chng_basis_tmp[:,1] = EV2_devi
         chng_basis_tmp[:,2] = EV3_devi
-        det_mat =  N.linalg.det(chng_basis_tmp)
+        det_mat =  np.linalg.det(chng_basis_tmp)
 
         symmetry_around_tension = 1
         clr = 1
@@ -898,7 +898,7 @@ class MomentTensor:
             if 0:#EW2 < 0 :
                 symmetry_around_tension = 1
                 clr = 1
-        if (EW3 < 0 and N.trace(self._M) >= 0):
+        if (EW3 < 0 and np.trace(self._M) >= 0):
             #reaching this point means, we have a serious problem, likely of numerical nature
             print 'Houston, we have had a problem  - check M !!!!!! \n ( Trace(M) > 0, but largest eigenvalue is still negative)'
             raise MTError(' !! ')
@@ -950,8 +950,8 @@ class MomentTensor:
 
 
         # build the basis system change matrix:
-        chng_basis    =  N.matrix(N.zeros((3,3)))
-        chng_fp_basis =  N.matrix(N.zeros((3,3)))
+        chng_basis    =  np.matrix(np.zeros((3,3)))
+        chng_fp_basis =  np.matrix(np.zeros((3,3)))
 
 
         #order of eigenvector's basis: (H,N,S)
@@ -1025,11 +1025,11 @@ class MomentTensor:
         """
 
         # reference Double Couple (in NED basis) - it has strike, dip, slip-rake = 0,0,0
-        refDC                    = N.matrix( [[0.,0.,-1.],[0.,0.,0.],[-1.,0.,0.]], dtype=N.float )
-        refDC_evals, refDC_evecs = N.linalg.eigh(refDC)
+        refDC                    = np.matrix( [[0.,0.,-1.],[0.,0.,0.],[-1.,0.,0.]], dtype=np.float )
+        refDC_evals, refDC_evecs = np.linalg.eigh(refDC)
 
         #matrix which is turning from one fault plane to the other
-        flip_dc                  = N.matrix( [[0.,0.,-1.],[0.,-1.,0.],[-1.,0.,0.]], dtype=N.float )
+        flip_dc                  = np.matrix( [[0.,0.,-1.],[0.,-1.,0.],[-1.,0.,0.]], dtype=np.float )
 
         #euler-tools need matrices of EV sorted in PNT:
         pnt_sorted_EV_matrix      = self._rotation_matrix.copy()
@@ -1042,14 +1042,14 @@ class MomentTensor:
         # rotation matrix, describing the rotation of the eigenvector
         # system of the input moment tensor into the eigenvector
         # system of the reference Double Couple
-        rot_matrix_fp1       = (N.dot(pnt_sorted_EV_matrix, refDC_evecs.T)).T
+        rot_matrix_fp1       = (np.dot(pnt_sorted_EV_matrix, refDC_evecs.T)).T
 
         #check, if rotation has correct orientation
-        if N.linalg.det(rot_matrix_fp1) < 0.:
+        if np.linalg.det(rot_matrix_fp1) < 0.:
             rot_matrix_fp1       *= -1.
 
         #adding a rotation into the (ambiguous) system of the second fault plane
-        rot_matrix_fp2       = N.dot(flip_dc,rot_matrix_fp1)
+        rot_matrix_fp2       = np.dot(flip_dc,rot_matrix_fp1)
 
         fp1                  = self._find_strike_dip_rake(rot_matrix_fp1)
         fp2                  = self._find_strike_dip_rake(rot_matrix_fp2)
@@ -1075,7 +1075,7 @@ class MomentTensor:
         """
         Builds a column vector (matrix type) from a 3 tuple.
         """
-        return N.matrix( [[x,y,z]], dtype=N.float ).T
+        return np.matrix( [[x,y,z]], dtype=np.float ).T
 
     #---------------------------------------------------------------
 
@@ -1090,16 +1090,16 @@ class MomentTensor:
         ez = self._cvec(0.,0.,1.)
         exs = rotmat.T * ex
         ezs = rotmat.T * ez
-        enodes = N.cross(ez.T,ezs.T).T
-        if N.linalg.norm(enodes) < 1e-10:
+        enodes = np.cross(ez.T,ezs.T).T
+        if np.linalg.norm(enodes) < 1e-10:
             enodes = exs
         enodess = rotmat*enodes
         cos_alpha = float((ez.T*ezs))
         if cos_alpha > 1.: cos_alpha = 1.
         if cos_alpha < -1.: cos_alpha = -1.
-        alpha = N.arccos(cos_alpha)
-        beta  = N.mod( N.arctan2( enodes[1,0], enodes[0,0] ), N.pi*2. )
-        gamma = N.mod( -N.arctan2( enodess[1,0], enodess[0,0] ), N.pi*2. )
+        alpha = np.arccos(cos_alpha)
+        beta  = np.mod( np.arctan2( enodes[1,0], enodes[0,0] ), np.pi*2. )
+        gamma = np.mod( -np.arctan2( enodess[1,0], enodess[0,0] ), np.pi*2. )
 
         return self._unique_euler(alpha,beta,gamma)
 
@@ -1122,7 +1122,7 @@ class MomentTensor:
         '''
 
 
-        alpha = N.mod( alpha, 2.0*pi )
+        alpha = np.mod( alpha, 2.0*pi )
 
         if 0.5*pi < alpha and alpha <= pi:
             alpha = pi - alpha
@@ -1137,9 +1137,9 @@ class MomentTensor:
             gamma = pi + gamma
 
 
-        alpha = N.mod( alpha, 2.0*pi )
-        beta  = N.mod( beta,  2.0*pi )
-        gamma = N.mod( gamma+pi, 2.0*pi )-pi
+        alpha = np.mod( alpha, 2.0*pi )
+        beta  = np.mod( beta,  2.0*pi )
+        gamma = np.mod( gamma+pi, 2.0*pi )-pi
 
         # If dip is exactly 90 degrees, one is still
         # free to choose between looking at the plane from either side.
@@ -1153,13 +1153,13 @@ class MomentTensor:
 
         if alpha == 0.5*pi and beta >= pi:
             gamma = - gamma
-            beta  = N.mod( beta-pi,  2.0*pi )
-            gamma = N.mod( gamma+pi, 2.0*pi )-pi
+            beta  = np.mod( beta-pi,  2.0*pi )
+            gamma = np.mod( gamma+pi, 2.0*pi )-pi
             assert 0. <= beta < pi
             assert -pi <= gamma < pi
 
         if alpha < 1e-7:
-            beta = N.mod(beta + gamma, 2.0*pi)
+            beta = np.mod(beta + gamma, 2.0*pi)
             gamma = 0.
 
         return (alpha, beta, gamma)
@@ -1211,11 +1211,11 @@ class MomentTensor:
         else:
             assert 3 in vectors.shape
 
-            if N.shape(vectors)[0] == 3:
-                for ii in  N.arange(N.shape(vectors)[1]) :
+            if np.shape(vectors)[0] == 3:
+                for ii in  np.arange(np.shape(vectors)[1]) :
                     lo_vectors.append(vectors[:,ii])
             else:
-                for ii in  N.arange(N.shape(vectors)[0]) :
+                for ii in  np.arange(np.shape(vectors)[0]) :
                     lo_vectors.append(vectors[:,ii].transpose())
 
         lo_vecs_to_show = []
@@ -1315,7 +1315,7 @@ class MomentTensor:
 
 
 
-        mexp = pow(10,N.ceil(N.log10(N.max(N.abs(self._M)))))
+        mexp = pow(10,np.ceil(np.log10(np.max(np.abs(self._M)))))
 
         m =  basis_transform_matrix(self._M/mexp, 'NED', self._output_basis)
 
@@ -1696,12 +1696,12 @@ def strikediprake_2_moments(strike,dip,rake):
             ang = 0.
 
 
-    M1 = - ( N.sin(D_rad)*N.cos(R_rad)*N.sin(2*S_rad) + N.sin(2*D_rad)*N.sin(R_rad)*N.sin(S_rad)**2 )
-    M2 =   ( N.sin(D_rad)*N.cos(R_rad)*N.sin(2*S_rad) - N.sin(2*D_rad)*N.sin(R_rad)*N.cos(S_rad)**2 )
-    M3 =   ( N.sin(2*D_rad)*N.sin(R_rad) )
-    M4 =   ( N.sin(D_rad)*N.cos(R_rad)*N.cos(2*S_rad) + 0.5*N.sin(2*D_rad)*N.sin(R_rad)*N.sin(2*S_rad) )
-    M5 = - ( N.cos(D_rad)*N.cos(R_rad)*N.cos(S_rad)   + N.cos(2*D_rad)*N.sin(R_rad)*N.sin(S_rad) )
-    M6 = - ( N.cos(D_rad)*N.cos(R_rad)*N.sin(S_rad)   - N.cos(2*D_rad)*N.sin(R_rad)*N.cos(S_rad))
+    M1 = - ( np.sin(D_rad)*np.cos(R_rad)*np.sin(2*S_rad) + np.sin(2*D_rad)*np.sin(R_rad)*np.sin(S_rad)**2 )
+    M2 =   ( np.sin(D_rad)*np.cos(R_rad)*np.sin(2*S_rad) - np.sin(2*D_rad)*np.sin(R_rad)*np.cos(S_rad)**2 )
+    M3 =   ( np.sin(2*D_rad)*np.sin(R_rad) )
+    M4 =   ( np.sin(D_rad)*np.cos(R_rad)*np.cos(2*S_rad) + 0.5*np.sin(2*D_rad)*np.sin(R_rad)*np.sin(2*S_rad) )
+    M5 = - ( np.cos(D_rad)*np.cos(R_rad)*np.cos(S_rad)   + np.cos(2*D_rad)*np.sin(R_rad)*np.sin(S_rad) )
+    M6 = - ( np.cos(D_rad)*np.cos(R_rad)*np.sin(S_rad)   - np.cos(2*D_rad)*np.sin(R_rad)*np.cos(S_rad))
 
 
     Moments = [M1, M2, M3, M4, M5, M6]
@@ -1719,12 +1719,12 @@ def fancy_matrix(m_in):
     m = m_in.copy()
 
     #    aftercom   = 1
-    #    maxlen =  (int(N.log10(N.max(N.abs(m)))))
+    #    maxlen =  (int(np.log10(np.max(np.abs(m)))))
     #     if maxlen < 0:
     #         aftercom = -maxlen + 1
     #         maxlen   = 1
 
-    norm_factor = round(max(abs(N.array(m).flatten())),5)
+    norm_factor = round(max(abs(np.array(m).flatten())),5)
 
     #print m
     #print norm_factor
@@ -2014,7 +2014,7 @@ class BeachBall:
 
         wstring = '> -Z%i\n'%(colour_Z)
         FH_string.write(wstring)
-        N.savetxt(FH_string, self._GMT_scaling*curve.transpose())
+        np.savetxt(FH_string, self._GMT_scaling*curve.transpose())
 
     #-------------------------------------------------------------------
 
@@ -2253,7 +2253,7 @@ class BeachBall:
 
         #if isotropic part shall be displayed, fill the circle completely with the appropriate colour
         if self._pure_isotropic:
-            if abs( N.trace( self._M )) > epsilon:
+            if abs( np.trace( self._M )) > epsilon:
                 if self._plot_clr_order < 0:
                     ax.fill(self._outer_circle[0,:], self._outer_circle[1,:],fc=tension_colour, alpha= 1,zorder=100 )
                 else:
@@ -2274,13 +2274,13 @@ class BeachBall:
                 y_coord = val[1]
                 np_letter = direction_letters[idx]
 
-                rot_angle    = - N.arctan2(y_coord,x_coord) + pi/2.
-                original_rho = N.sqrt(x_coord**2 + y_coord**2)
+                rot_angle    = - np.arctan2(y_coord,x_coord) + pi/2.
+                original_rho = np.sqrt(x_coord**2 + y_coord**2)
 
-                marker_x  = ( original_rho - ( 3* symsize  / points_per_unit ) ) * N.sin( rot_angle )
-                marker_y  = ( original_rho - ( 3* symsize  / points_per_unit ) ) * N.cos( rot_angle )
-                annot_x   = ( original_rho - ( 8.5* fontsize / points_per_unit ) ) * N.sin( rot_angle )
-                annot_y   = ( original_rho - ( 8.5* fontsize / points_per_unit ) ) * N.cos( rot_angle )
+                marker_x  = ( original_rho - ( 3* symsize  / points_per_unit ) ) * np.sin( rot_angle )
+                marker_y  = ( original_rho - ( 3* symsize  / points_per_unit ) ) * np.cos( rot_angle )
+                annot_x   = ( original_rho - ( 8.5* fontsize / points_per_unit ) ) * np.sin( rot_angle )
+                annot_y   = ( original_rho - ( 8.5* fontsize / points_per_unit ) ) * np.cos( rot_angle )
 
                 ax.text(annot_x,annot_y,np_letter,horizontalalignment='center', size=fontsize,weight='bold', verticalalignment='center',\
                         bbox=dict(edgecolor='white',facecolor='white', alpha=1))
@@ -2357,17 +2357,17 @@ class BeachBall:
         ax = fig.add_axes([0.1, 0.1, 0.8, 0.8], polar=True, axisbg='#d5de9c')
 
         r_steps  = [0.000001]
-        for i in (N.arange(4)+1)*0.2:
+        for i in (np.arange(4)+1)*0.2:
             r_steps.append(i)
         r_labels = ['S']
-        for ii in N.arange(len(r_steps)):
+        for ii in np.arange(len(r_steps)):
             if (ii+1)%2==0:
                 r_labels.append(str(r_steps[ii]))
             else:
                 r_labels.append(' ')
 
 
-        t_angles = N.arange(0.,360.,90)
+        t_angles = np.arange(0.,360.,90)
         t_labels = [' N ',' H ',' - N',' - H']
 
         P.thetagrids( t_angles, labels=t_labels )
@@ -2537,7 +2537,7 @@ class BeachBall:
         self._projection_2_unit_sphere()
 
         if self.MT._iso_percentage == 100:
-            if N.trace(self.MT.get_M()) < 0:
+            if np.trace(self.MT.get_M()) < 0:
                 self._plot_clr_order = 1
             else:
                 self._plot_clr_order = -1
@@ -2566,23 +2566,23 @@ class BeachBall:
             obj2cor_in_right_order = self._sort_curve_points(obj2cor)
 
             # check, if curve closed !!!!!!
-            start_r               = N.sqrt(obj2cor_in_right_order[0,0]**2  + obj2cor_in_right_order[1,0]**2 )
-            r_last_point          = N.sqrt(obj2cor_in_right_order[0,-1]**2 + obj2cor_in_right_order[1,-1]**2   )
-            dist_last_first_point = N.sqrt( (obj2cor_in_right_order[0,-1] - obj2cor_in_right_order[0,0])**2 + (obj2cor_in_right_order[1,-1] - obj2cor_in_right_order[1,0] )**2 )
+            start_r               = np.sqrt(obj2cor_in_right_order[0,0]**2  + obj2cor_in_right_order[1,0]**2 )
+            r_last_point          = np.sqrt(obj2cor_in_right_order[0,-1]**2 + obj2cor_in_right_order[1,-1]**2   )
+            dist_last_first_point = np.sqrt( (obj2cor_in_right_order[0,-1] - obj2cor_in_right_order[0,0])**2 + (obj2cor_in_right_order[1,-1] - obj2cor_in_right_order[1,0] )**2 )
 
 
             # check, if distance between last and first point is smaller than the distance between last point and the edge (at radius=2)
             if dist_last_first_point > (2 - r_last_point):
                 #add points on edge to polygon, if it is an open curve
-                phi_end   = N.arctan2(obj2cor_in_right_order[0,-1],obj2cor_in_right_order[1,-1])% (2*pi)
+                phi_end   = np.arctan2(obj2cor_in_right_order[0,-1],obj2cor_in_right_order[1,-1])% (2*pi)
                 R_end     = r_last_point
-                phi_start = N.arctan2(obj2cor_in_right_order[0,0],obj2cor_in_right_order[1,0])% (2*pi)
+                phi_start = np.arctan2(obj2cor_in_right_order[0,0],obj2cor_in_right_order[1,0])% (2*pi)
                 R_start   = start_r
 
 
                 #add one point on the edge every fraction of degree given by input parameter, increase the radius linearily
-                phi_end_larger   = N.sign(phi_end-phi_start)
-                angle_smaller_pi = N.sign( pi - N.abs(phi_end - phi_start) )
+                phi_end_larger   = np.sign(phi_end-phi_start)
+                angle_smaller_pi = np.sign( pi - np.abs(phi_end - phi_start) )
 
                 if phi_end_larger * angle_smaller_pi > 0:
                     go_ccw = True
@@ -2598,18 +2598,18 @@ class BeachBall:
 
                 if go_ccw:
                     obj2cor_in_right_order = list(obj2cor_in_right_order.transpose())
-                    for kk in N.arange(n_edgepoints)+1:
+                    for kk in np.arange(n_edgepoints)+1:
                         current_phi    = phi_end - kk*openangle/(n_edgepoints+1)
                         current_radius = R_end + kk*radius_interval/(n_edgepoints+1)
-                        obj2cor_in_right_order.append([current_radius*N.sin(current_phi), current_radius*N.cos(current_phi) ]   )
-                    obj2cor_in_right_order = N.array(obj2cor_in_right_order).transpose()
+                        obj2cor_in_right_order.append([current_radius*np.sin(current_phi), current_radius*np.cos(current_phi) ]   )
+                    obj2cor_in_right_order = np.array(obj2cor_in_right_order).transpose()
                 else:
                     obj2cor_in_right_order = list(obj2cor_in_right_order.transpose())
-                    for kk in N.arange(n_edgepoints)+1:
+                    for kk in np.arange(n_edgepoints)+1:
                         current_phi = phi_end + kk*openangle/(n_edgepoints+1)
                         current_radius = R_end + kk*radius_interval/(n_edgepoints+1)
-                        obj2cor_in_right_order.append([current_radius*N.sin(current_phi), current_radius*N.cos(current_phi) ]   )
-                    obj2cor_in_right_order = N.array(obj2cor_in_right_order).transpose()
+                        obj2cor_in_right_order.append([current_radius*np.sin(current_phi), current_radius*np.cos(current_phi) ]   )
+                    obj2cor_in_right_order = np.array(obj2cor_in_right_order).transpose()
 
 
             setattr(self,'_'+obj+'_in_order',obj2cor_in_right_order)
@@ -2644,7 +2644,7 @@ class BeachBall:
         # N-axis. Running mathematically negative (clockwise) around the
         # SIGMA-axis. Stepsize is given by the parametre for number of
         # curve points
-        phi   = (N.arange(n_curve_points)/float(n_curve_points) + 1./n_curve_points )*2*pi
+        phi   = (np.arange(n_curve_points)/float(n_curve_points) + 1./n_curve_points )*2*pi
         self._phi_curve           = phi
 
         # analytical/geometrical solution for separatrix curve - alpha is opening angle
@@ -2655,9 +2655,9 @@ class BeachBall:
         # sigma axis flippes, if EWn flippes sign
 
         #--------------------------------------------------------------------------------------------------
-        EWh_devi = self.MT.get_eigvals()[0] - 1./3 * N.trace(self._M)
-        EWn_devi = self.MT.get_eigvals()[1] - 1./3 * N.trace(self._M)
-        EWs_devi = self.MT.get_eigvals()[2] - 1./3 * N.trace(self._M)
+        EWh_devi = self.MT.get_eigvals()[0] - 1./3 * np.trace(self._M)
+        EWn_devi = self.MT.get_eigvals()[1] - 1./3 * np.trace(self._M)
+        EWs_devi = self.MT.get_eigvals()[2] - 1./3 * np.trace(self._M)
 
         if not self._plot_isotropic_part:
             EWh = EWh_devi
@@ -2667,11 +2667,11 @@ class BeachBall:
 
         else:
 
-            EWh_tmp = self.MT.get_eigvals()[0]# - 1./3 * N.trace(self._M)
-            EWn_tmp = self.MT.get_eigvals()[1]# - 1./3 * N.trace(self._M)
-            EWs_tmp = self.MT.get_eigvals()[2]# - 1./3 * N.trace(self._M)
+            EWh_tmp = self.MT.get_eigvals()[0]# - 1./3 * np.trace(self._M)
+            EWn_tmp = self.MT.get_eigvals()[1]# - 1./3 * np.trace(self._M)
+            EWs_tmp = self.MT.get_eigvals()[2]# - 1./3 * np.trace(self._M)
 
-            trace_m = N.sum(self.MT.get_eigvals())
+            trace_m = np.sum(self.MT.get_eigvals())
             EWh = EWh_tmp.copy()
             EWs = EWs_tmp.copy()
 
@@ -2693,45 +2693,45 @@ class BeachBall:
 
         if abs(EWn) < epsilon:
             EWn = 0
-        norm_factor =  max(N.abs([EWh,EWn,EWs]))
+        norm_factor =  max(np.abs([EWh,EWn,EWs]))
 
         [EWh,EWn,EWs] = [xx /norm_factor  for xx in [EWh,EWn,EWs] ]
 
 
-        RHS   = -EWs /(EWn * N.cos(phi)**2 + EWh * N.sin(phi)**2 )
+        RHS   = -EWs /(EWn * np.cos(phi)**2 + EWh * np.sin(phi)**2 )
 
-        if N.all([N.sign(xx)>=0 for xx in RHS ]):
-            alpha = N.arctan(N.sqrt(RHS) ) *rad2deg
+        if np.all([np.sign(xx)>=0 for xx in RHS ]):
+            alpha = np.arctan(np.sqrt(RHS) ) *rad2deg
         else:
             alpha = phi.copy()
             alpha[:] = 90
             self._pure_isotropic = 1
 
         #fault planes:
-        RHS_FP   = 1. /( N.sin(phi)**2 )
-        alpha_FP = N.arctan(N.sqrt(RHS_FP) ) *rad2deg
+        RHS_FP   = 1. /( np.sin(phi)**2 )
+        alpha_FP = np.arctan(np.sqrt(RHS_FP) ) *rad2deg
 
 
         # horizontal coordinates of curves
-        r_hor             =  N.sin(alpha /rad2deg)
-        r_hor_FP          =  N.sin(alpha_FP /rad2deg)
+        r_hor             =  np.sin(alpha /rad2deg)
+        r_hor_FP          =  np.sin(alpha_FP /rad2deg)
 
         self._r_hor_for_pa_plot    = r_hor
         self._r_hor_FP_for_pa_plot = r_hor_FP
 
 
-        H_values          =  N.sin(phi) * r_hor
-        N_values          =  N.cos(phi) * r_hor
-        H_values_FP       =  N.sin(phi) * r_hor_FP
-        N_values_FP       =  N.cos(phi) * r_hor_FP
+        H_values          =  np.sin(phi) * r_hor
+        N_values          =  np.cos(phi) * r_hor
+        H_values_FP       =  np.sin(phi) * r_hor_FP
+        N_values_FP       =  np.cos(phi) * r_hor_FP
 
 
 
         # set vertical value of curve point coordinates - two symmetric curves exist
-        S_values_positive    =  N.cos(alpha/rad2deg)
-        S_values_negative    = -N.cos(alpha/rad2deg)
-        S_values_positive_FP =  N.cos(alpha_FP/rad2deg)
-        S_values_negative_FP = -N.cos(alpha_FP/rad2deg)
+        S_values_positive    =  np.cos(alpha/rad2deg)
+        S_values_negative    = -np.cos(alpha/rad2deg)
+        S_values_positive_FP =  np.cos(alpha_FP/rad2deg)
+        S_values_negative_FP = -np.cos(alpha_FP/rad2deg)
 
 
         #############
@@ -2740,44 +2740,44 @@ class BeachBall:
 
         chng_basis = self.MT._rotation_matrix
 
-        line_tuple_pos = N.zeros((3,n_curve_points ))
-        line_tuple_neg = N.zeros((3,n_curve_points ))
+        line_tuple_pos = np.zeros((3,n_curve_points ))
+        line_tuple_neg = np.zeros((3,n_curve_points ))
 
 
-        for ii in N.arange(n_curve_points):
-            pos_vec_in_EV_basis  = N.array([H_values[ii],N_values[ii],S_values_positive[ii] ]).transpose()
-            neg_vec_in_EV_basis  = N.array([H_values[ii],N_values[ii],S_values_negative[ii] ]).transpose()
-            line_tuple_pos[:,ii] = N.dot(chng_basis, pos_vec_in_EV_basis )
-            line_tuple_neg[:,ii] = N.dot(chng_basis, neg_vec_in_EV_basis )
+        for ii in np.arange(n_curve_points):
+            pos_vec_in_EV_basis  = np.array([H_values[ii],N_values[ii],S_values_positive[ii] ]).transpose()
+            neg_vec_in_EV_basis  = np.array([H_values[ii],N_values[ii],S_values_negative[ii] ]).transpose()
+            line_tuple_pos[:,ii] = np.dot(chng_basis, pos_vec_in_EV_basis )
+            line_tuple_neg[:,ii] = np.dot(chng_basis, neg_vec_in_EV_basis )
 
         EVh = self.MT.get_eigvecs()[0]
         EVn = self.MT.get_eigvecs()[1]
         EVs = self.MT.get_eigvecs()[2]
 
-        all_EV = N.zeros((3,6))
+        all_EV = np.zeros((3,6))
 
-        EVh_orig     = N.dot(chng_basis, EVs)
+        EVh_orig     = np.dot(chng_basis, EVs)
         all_EV[:,0]  =  EVh.transpose() #_orig.transpose()
-        EVn_orig     = N.dot(chng_basis, EVn)
+        EVn_orig     = np.dot(chng_basis, EVn)
         all_EV[:,1]  = EVn.transpose() # _orig.transpose()
-        EVs_orig     = N.dot(chng_basis, EVh)
+        EVs_orig     = np.dot(chng_basis, EVh)
         all_EV[:,2]  = EVs.transpose() # _orig.transpose()
-        EVh_orig_neg = N.dot(chng_basis, EVs)
+        EVh_orig_neg = np.dot(chng_basis, EVs)
         all_EV[:,3]  = -EVh.transpose() #_orig_neg.transpose()
-        EVn_orig_neg = N.dot(chng_basis, EVn)
+        EVn_orig_neg = np.dot(chng_basis, EVn)
         all_EV[:,4]  = -EVn.transpose() # _orig_neg.transpose()
-        EVs_orig_neg = N.dot(chng_basis, EVh)
+        EVs_orig_neg = np.dot(chng_basis, EVh)
         all_EV[:,5]  = -EVs.transpose() # _orig_neg.transpose()
 
 
         #basis vectors:
-        all_BV       = N.zeros((3,6))
-        all_BV[:,0]  = N.array((1,0,0))
-        all_BV[:,1]  = N.array((-1,0,0))
-        all_BV[:,2]  = N.array((0,1,0))
-        all_BV[:,3]  = N.array((0,-1,0))
-        all_BV[:,4]  = N.array((0,0,1))
-        all_BV[:,5]  = N.array((0,0,-1))
+        all_BV       = np.zeros((3,6))
+        all_BV[:,0]  = np.array((1,0,0))
+        all_BV[:,1]  = np.array((-1,0,0))
+        all_BV[:,2]  = np.array((0,1,0))
+        all_BV[:,3]  = np.array((0,-1,0))
+        all_BV[:,4]  = np.array((0,0,1))
+        all_BV[:,5]  = np.array((0,0,-1))
 
 
         #re-sort the two 90 degree nodal lines to 2 fault planes -> cut each at
@@ -2786,22 +2786,22 @@ class BeachBall:
 
         midpoint_idx = int(n_curve_points/2.)
 
-        FP1 = N.zeros((3,n_curve_points ))
-        FP2 = N.zeros((3,n_curve_points ))
+        FP1 = np.zeros((3,n_curve_points ))
+        FP2 = np.zeros((3,n_curve_points ))
 
-        for ii in N.arange(midpoint_idx):
-            FP1_vec   = N.array([H_values_FP[ii],N_values_FP[ii],S_values_positive_FP[ii] ]).transpose()
-            FP2_vec   = N.array([H_values_FP[ii],N_values_FP[ii],S_values_negative_FP[ii] ]).transpose()
-            FP1[:,ii] = N.dot(chng_basis, FP1_vec )
-            FP2[:,ii] = N.dot(chng_basis, FP2_vec )
+        for ii in np.arange(midpoint_idx):
+            FP1_vec   = np.array([H_values_FP[ii],N_values_FP[ii],S_values_positive_FP[ii] ]).transpose()
+            FP2_vec   = np.array([H_values_FP[ii],N_values_FP[ii],S_values_negative_FP[ii] ]).transpose()
+            FP1[:,ii] = np.dot(chng_basis, FP1_vec )
+            FP2[:,ii] = np.dot(chng_basis, FP2_vec )
 
-        for jj in N.arange(midpoint_idx):
+        for jj in np.arange(midpoint_idx):
             ii = n_curve_points - jj - 1
 
-            FP1_vec = N.array([H_values_FP[ii],N_values_FP[ii],S_values_negative_FP[ii] ]).transpose()
-            FP2_vec = N.array([H_values_FP[ii],N_values_FP[ii],S_values_positive_FP[ii] ]).transpose()
-            FP1[:,ii] = N.dot(chng_basis, FP1_vec )
-            FP2[:,ii] = N.dot(chng_basis, FP2_vec )
+            FP1_vec = np.array([H_values_FP[ii],N_values_FP[ii],S_values_negative_FP[ii] ]).transpose()
+            FP2_vec = np.array([H_values_FP[ii],N_values_FP[ii],S_values_positive_FP[ii] ]).transpose()
+            FP1[:,ii] = np.dot(chng_basis, FP1_vec )
+            FP2[:,ii] = np.dot(chng_basis, FP2_vec )
 
         #identify with faultplane index, gotten from 'get_fps':
         self._FP1                 = FP1
@@ -2860,16 +2860,16 @@ class BeachBall:
         new_longitude = self._plot_viewpoint[1]
         new_azimuth   = self._plot_viewpoint[2]
 
-        s_lat = N.sin(new_latitude/rad2deg)
+        s_lat = np.sin(new_latitude/rad2deg)
         if abs(s_lat) < epsilon :
             s_lat = 0
-        c_lat = N.cos(new_latitude/rad2deg)
+        c_lat = np.cos(new_latitude/rad2deg)
         if abs(c_lat) < epsilon :
             c_lat = 0
-        s_lon = N.sin(new_longitude/rad2deg)
+        s_lon = np.sin(new_longitude/rad2deg)
         if abs(s_lon) < epsilon :
             s_lon = 0
-        c_lon = N.cos(new_longitude/rad2deg)
+        c_lon = np.cos(new_longitude/rad2deg)
         if abs(c_lon) < epsilon :
             c_lon = 0
 
@@ -2880,40 +2880,40 @@ class BeachBall:
         # (cos(latitude), sin(latitude)*sin(longitude), sin(latitude)*cos(longitude) )
         #
         # new " down' " is given by the negative position vector, so pointing inwards to the centre point
-        #down_prime = - ( N.array( ( s_lat, c_lat*c_lon, -c_lat*s_lon ) ) )
-        down_prime = - ( N.array( ( s_lat, c_lat*s_lon , -c_lat*c_lon) ) )
+        #down_prime = - ( np.array( ( s_lat, c_lat*c_lon, -c_lat*s_lon ) ) )
+        down_prime = - ( np.array( ( s_lat, c_lat*s_lon , -c_lat*c_lon) ) )
 
         #normalise:
-        down_prime /= N.sqrt(N.dot(down_prime,down_prime))
+        down_prime /= np.sqrt(np.dot(down_prime,down_prime))
 
         #print down_prime
         # get second local basis vector " north' " by orthogonalising (Gram-Schmidt method) the original north w.r.t. the new " down' "
-        north_prime_not_normalised     = N.array( (1.,0.,0.) ) - ( N.dot(down_prime,  N.array( (1.,0.,0.) ) )/(N.dot(down_prime,down_prime)) * down_prime)
+        north_prime_not_normalised     = np.array( (1.,0.,0.) ) - ( np.dot(down_prime,  np.array( (1.,0.,0.) ) )/(np.dot(down_prime,down_prime)) * down_prime)
 
-        len_north_prime_not_normalised = N.sqrt(N.dot(north_prime_not_normalised,north_prime_not_normalised))
+        len_north_prime_not_normalised = np.sqrt(np.dot(north_prime_not_normalised,north_prime_not_normalised))
         # check for poles:
-        if N.abs(len_north_prime_not_normalised) < epsilon:
+        if np.abs(len_north_prime_not_normalised) < epsilon:
             #case: north pole
             if s_lat > 0 :
-                north_prime                    =  N.array( (0.,0.,1.) )
+                north_prime                    =  np.array( (0.,0.,1.) )
             #case: south pole
             else:
-                north_prime                    =  N.array( (0.,0.,-1.) )
+                north_prime                    =  np.array( (0.,0.,-1.) )
         else:
             north_prime                    = north_prime_not_normalised / len_north_prime_not_normalised
 
         # third basis vector is obtained by a cross product of the first two
-        east_prime                 = N.cross(down_prime,north_prime)
+        east_prime                 = np.cross(down_prime,north_prime)
 
         #normalise:
-        east_prime    /=  N.sqrt(N.dot(east_prime,east_prime))
+        east_prime    /=  np.sqrt(np.dot(east_prime,east_prime))
 
-        rotmat_pos_raw      =  N.zeros((3,3))
+        rotmat_pos_raw      =  np.zeros((3,3))
         rotmat_pos_raw[:,0] =  north_prime
         rotmat_pos_raw[:,1] =  east_prime
         rotmat_pos_raw[:,2] =  down_prime
 
-        rotmat_pos = N.matrix(rotmat_pos_raw).T
+        rotmat_pos = np.matrix(rotmat_pos_raw).T
         # this matrix gives the coordinates of a given point in the old coordinates w.r.t. the new system
 
         #up to here, only the position has changed, the angle of view
@@ -2923,11 +2923,11 @@ class BeachBall:
         # set up the local rotation around the new down'-axis by the given
         # angle 'azimuth'. Positive values turn view counterclockwise from the new
         # north'
-        only_rotation = N.zeros((3,3))
-        s_az = N.sin(new_azimuth/rad2deg)
+        only_rotation = np.zeros((3,3))
+        s_az = np.sin(new_azimuth/rad2deg)
         if abs(s_az) < epsilon:
             s_az = 0.
-        c_az = N.cos(new_azimuth/rad2deg)
+        c_az = np.cos(new_azimuth/rad2deg)
         if abs(c_az) < epsilon:
            c_az = 0.
 
@@ -2937,10 +2937,10 @@ class BeachBall:
         only_rotation[0,1] = -s_az
         only_rotation[1,0] = s_az
 
-        local_rotation = N.matrix(only_rotation)
+        local_rotation = np.matrix(only_rotation)
 
         #apply rotation from left!!
-        total_rotation_matrix = N.dot(local_rotation,rotmat_pos)
+        total_rotation_matrix = np.dot(local_rotation,rotmat_pos)
 
 
         # yields the complete matrix for representing the old coordinates in the new (rotated) frame:
@@ -2962,12 +2962,12 @@ class BeachBall:
 
             object2rotate = getattr(self,'_'+obj).transpose()
 
-            #logger.debug( str(N.shape(object2rotate)),str(len(object2rotate)) )
-            #logger.debug( str(N.shape(self._plot_basis_change)) )
+            #logger.debug( str(np.shape(object2rotate)),str(len(object2rotate)) )
+            #logger.debug( str(np.shape(self._plot_basis_change)) )
 
             rotated_thing = object2rotate.copy()
-            for i in N.arange(len(object2rotate)):
-                rotated_thing[i] = N.dot(self._plot_basis_change,object2rotate[i])
+            for i in np.arange(len(object2rotate)):
+                rotated_thing[i] = np.dot(self._plot_basis_change,object2rotate[i])
 
             rotated_object = rotated_thing.copy()
             setattr(self,'_'+obj+'_rotated',rotated_object.transpose())
@@ -3039,9 +3039,9 @@ class BeachBall:
             coords   = o2proj.copy()
 
             n_points = len(o2proj[0,:])
-            stereo_coords = N.zeros((2,n_points))
+            stereo_coords = np.zeros((2,n_points))
 
-            for ll in N.arange(n_points):
+            for ll in np.arange(n_points):
                 # second component is EAST
                 co_x = coords[1,ll]
 
@@ -3052,7 +3052,7 @@ class BeachBall:
                 co_z = -coords[2,ll]
 
 
-                rho_hor = N.sqrt(co_x**2 + co_y**2)
+                rho_hor = np.sqrt(co_x**2 + co_y**2)
 
                 if rho_hor == 0:
                     new_y = 0
@@ -3120,9 +3120,9 @@ class BeachBall:
             coords   = o2proj.copy()
 
             n_points = len(o2proj[0,:])
-            coords2D = N.zeros((2,n_points))
+            coords2D = np.zeros((2,n_points))
 
-            for ll in N.arange(n_points):
+            for ll in np.arange(n_points):
                 # second component is EAST
                 co_x = coords[1,ll]
 
@@ -3133,7 +3133,7 @@ class BeachBall:
                 co_z = -coords[2,ll]
 
 
-                rho_hor = N.sqrt(co_x**2 + co_y**2)
+                rho_hor = np.sqrt(co_x**2 + co_y**2)
 
                 if rho_hor == 0:
                     new_y = 0
@@ -3204,9 +3204,9 @@ class BeachBall:
             coords   = o2proj.copy()
 
             n_points = len(o2proj[0,:])
-            coords2D = N.zeros((2,n_points))
+            coords2D = np.zeros((2,n_points))
 
-            for ll in N.arange(n_points):
+            for ll in np.arange(n_points):
                 # second component is EAST
                 co_x = coords[1,ll]
 
@@ -3216,7 +3216,7 @@ class BeachBall:
                 # z given in DOWN
                 co_z = -coords[2,ll]
 
-                rho_hor = N.sqrt(co_x**2 + co_y**2)
+                rho_hor = np.sqrt(co_x**2 + co_y**2)
 
                 if rho_hor == 0:
                     new_y = 0
@@ -3232,19 +3232,19 @@ class BeachBall:
 
                 else:
                     if co_z < 0:
-                        new_rho =      rho_hor/N.sqrt(1.-co_z)
+                        new_rho =      rho_hor/np.sqrt(1.-co_z)
 
                         if plot_upper_hem:
-                            new_rho = 2 - (rho_hor/N.sqrt(1.-co_z))
+                            new_rho = 2 - (rho_hor/np.sqrt(1.-co_z))
 
                         new_x   = co_x /rho_hor * new_rho
                         new_y   = co_y /rho_hor * new_rho
 
                     else:
-                        new_rho = 2 - (rho_hor/N.sqrt(1.+co_z))
+                        new_rho = 2 - (rho_hor/np.sqrt(1.+co_z))
 
                         if plot_upper_hem:
-                            new_rho =      rho_hor/N.sqrt(1.+co_z)
+                            new_rho =      rho_hor/np.sqrt(1.+co_z)
 
                         new_x   = co_x /rho_hor * new_rho
                         new_y   = co_y /rho_hor * new_rho
@@ -3290,10 +3290,10 @@ class BeachBall:
             coords   = o2proj.copy()
 
             n_points = len(o2proj[0,:])
-            coords2D = N.zeros((2,n_points))
+            coords2D = np.zeros((2,n_points))
 
 
-            for ll in N.arange(n_points):
+            for ll in np.arange(n_points):
                 # second component is EAST
                 co_x = coords[1,ll]
 
@@ -3304,7 +3304,7 @@ class BeachBall:
                 co_z = -coords[2,ll]
 
 
-                rho_hor = N.sqrt(co_x**2 + co_y**2)
+                rho_hor = np.sqrt(co_x**2 + co_y**2)
 
                 if rho_hor == 0:
                     new_y = 0
@@ -3316,19 +3316,19 @@ class BeachBall:
 
                 else:
                     if co_z < 0:
-                        new_rho =     N.cos(N.arcsin(rho_hor)) *N.tan(N.arcsin(rho_hor))
+                        new_rho =     np.cos(np.arcsin(rho_hor)) *np.tan(np.arcsin(rho_hor))
 
                         if plot_upper_hem:
-                            new_rho = 2 - (   N.cos(N.arcsin(rho_hor)) * N.tan(N.arcsin(rho_hor))  )
+                            new_rho = 2 - (   np.cos(np.arcsin(rho_hor)) * np.tan(np.arcsin(rho_hor))  )
 
                         new_x   = co_x /rho_hor * new_rho
                         new_y   = co_y /rho_hor * new_rho
 
                     else:
-                        new_rho =  2 - ( N.cos(N.arcsin(rho_hor))* N.tan(N.arcsin(rho_hor)))
+                        new_rho =  2 - ( np.cos(np.arcsin(rho_hor))* np.tan(np.arcsin(rho_hor)))
 
                         if plot_upper_hem:
-                            new_rho =    N.cos(N.arcsin(rho_hor)) * N.tan(N.arcsin(rho_hor))
+                            new_rho =    np.cos(np.arcsin(rho_hor)) * np.tan(np.arcsin(rho_hor))
 
                         new_x   = co_x /rho_hor * new_rho
                         new_y   = co_y /rho_hor * new_rho
@@ -3355,9 +3355,9 @@ class BeachBall:
 
         phi = self._phi_curve
 
-        UnitSphere      = N.zeros((2,len(phi)))
-        UnitSphere[0,:] = N.cos(phi)
-        UnitSphere[1,:] = N.sin(phi)
+        UnitSphere      = np.zeros((2,len(phi)))
+        UnitSphere[0,:] = np.cos(phi)
+        UnitSphere[1,:] = np.sin(phi)
 
         # outer circle ( radius for stereographic projection is set to 2 )
         outer_circle_points      = 2 * UnitSphere
@@ -3376,22 +3376,22 @@ class BeachBall:
         """
 
 
-        sorted_curve = N.zeros((2,len(curve[0,:])))
+        sorted_curve = np.zeros((2,len(curve[0,:])))
 
         #in polar coordinates
         #
-        r_phi_curve = N.zeros((len(curve[0,:]),2))
-        for ii in N.arange(len(curve[0,:])):
-            r_phi_curve[ii,0] = N.sqrt(curve[0,ii]**2 + curve[1,ii]**2 )
-            r_phi_curve[ii,1] = N.arctan2(curve[0,ii],curve[1,ii])% (2*pi)
+        r_phi_curve = np.zeros((len(curve[0,:]),2))
+        for ii in np.arange(len(curve[0,:])):
+            r_phi_curve[ii,0] = np.sqrt(curve[0,ii]**2 + curve[1,ii]**2 )
+            r_phi_curve[ii,1] = np.arctan2(curve[0,ii],curve[1,ii])% (2*pi)
 
         #find index with highest r
-        largest_r_idx = N.argmax(r_phi_curve[:,0])
+        largest_r_idx = np.argmax(r_phi_curve[:,0])
 
         #check, if perhaps more values with same r - if so, take point with lowest phi
-        other_idces = list(N.where(r_phi_curve[:,0]==r_phi_curve[largest_r_idx,0]))
+        other_idces = list(np.where(r_phi_curve[:,0]==r_phi_curve[largest_r_idx,0]))
         if len(other_idces) > 1:
-            best_idx        = N.argmin(r_phi_curve[other_idces,1])
+            best_idx        = np.argmin(r_phi_curve[other_idces,1])
             start_idx_curve = other_idces[best_idx]
         else:
             start_idx_curve = largest_r_idx
@@ -3423,7 +3423,7 @@ class BeachBall:
             #direction is kept
 
             #logger.debug( 'curve with same direction as before\n' )
-            for jj in N.arange(len(curve[0,:])):
+            for jj in np.arange(len(curve[0,:])):
                 running_idx = (start_idx_curve + jj) %len(curve[0,:])
                 sorted_curve[0,jj] = curve[0,running_idx]
                 sorted_curve[1,jj] = curve[1,running_idx]
@@ -3431,7 +3431,7 @@ class BeachBall:
         else:
             #direction  is reversed
             #logger.debug( 'curve with reverted direction\n' )
-            for jj in N.arange(len(curve[0,:])):
+            for jj in np.arange(len(curve[0,:])):
                 running_idx = (start_idx_curve - jj) %len(curve[0,:])
                 sorted_curve[0,jj] = curve[0,running_idx]
                 sorted_curve[1,jj] = curve[1,running_idx]
@@ -3443,9 +3443,9 @@ class BeachBall:
         # points 2 and three, correct position of first point: keep R, but
         # take angle with same difference as point 2 to point 3
 
-        angle_point_1 = (N.arctan2(sorted_curve[0,0],sorted_curve[1,0])%(2*pi))
-        angle_point_2 = (N.arctan2(sorted_curve[0,1],sorted_curve[1,1])%(2*pi))
-        angle_point_3 = (N.arctan2(sorted_curve[0,2],sorted_curve[1,2])%(2*pi))
+        angle_point_1 = (np.arctan2(sorted_curve[0,0],sorted_curve[1,0])%(2*pi))
+        angle_point_2 = (np.arctan2(sorted_curve[0,1],sorted_curve[1,1])%(2*pi))
+        angle_point_3 = (np.arctan2(sorted_curve[0,2],sorted_curve[1,2])%(2*pi))
 
         angle_diff_23 = ( angle_point_3 - angle_point_2 )
         if angle_diff_23 > pi :
@@ -3455,11 +3455,11 @@ class BeachBall:
         if angle_diff_12 > pi :
             angle_diff_12 = (-angle_diff_12)%(2*pi)
 
-        if N.abs( angle_diff_12) > N.abs( angle_diff_23):
-            r_old = N.sqrt(sorted_curve[0,0]**2 + sorted_curve[1,0]**2)
+        if np.abs( angle_diff_12) > np.abs( angle_diff_23):
+            r_old = np.sqrt(sorted_curve[0,0]**2 + sorted_curve[1,0]**2)
             new_angle = (angle_point_2 - angle_diff_23)%(2*pi)
-            sorted_curve[0,0] = r_old * N.sin(new_angle)
-            sorted_curve[1,0] = r_old * N.cos(new_angle)
+            sorted_curve[0,0] = r_old * np.sin(new_angle)
+            sorted_curve[1,0] = r_old * np.cos(new_angle)
 
 
         return sorted_curve
@@ -3487,18 +3487,18 @@ class BeachBall:
             obj = getattr(self,'_'+obj_name).transpose()
 
 
-            smoothed_array      = N.zeros((1,2))
+            smoothed_array      = np.zeros((1,2))
             smoothed_array[0,:] = obj[0]
 
             #now in shape (n_points,2)
             for idx,val in enumerate(obj[:-1]):
-                r1   = N.sqrt(val[0]**2 + val[1]**2)
-                r2   = N.sqrt(obj[idx+1][0]**2 + obj[idx+1][1]**2   )
-                phi1 = N.arctan2(val[0],val[1])
-                phi2 = N.arctan2(obj[idx+1][0],obj[idx+1][1])
+                r1   = np.sqrt(val[0]**2 + val[1]**2)
+                r2   = np.sqrt(obj[idx+1][0]**2 + obj[idx+1][1]**2   )
+                phi1 = np.arctan2(val[0],val[1])
+                phi2 = np.arctan2(obj[idx+1][0],obj[idx+1][1])
 
-                phi2_larger      = N.sign( phi2 - phi1 )
-                angle_smaller_pi = N.sign( pi - abs(phi2 - phi1) )
+                phi2_larger      = np.sign( phi2 - phi1 )
+                angle_smaller_pi = np.sign( pi - abs(phi2 - phi1) )
 
                 if phi2_larger * angle_smaller_pi > 0:
                     go_cw     = True
@@ -3513,20 +3513,20 @@ class BeachBall:
                 if openangle_deg > 1./points_per_degree:
 
                     n_fillpoints = int(openangle_deg * points_per_degree)
-                    fill_array   = N.zeros((n_fillpoints,2))
+                    fill_array   = np.zeros((n_fillpoints,2))
                     if go_cw:
-                        angles       = ((N.arange(n_fillpoints)+1)*openangle/(n_fillpoints+1) + phi1)%(2*pi)
+                        angles       = ((np.arange(n_fillpoints)+1)*openangle/(n_fillpoints+1) + phi1)%(2*pi)
                     else:
-                        angles       = (phi1 - (N.arange(n_fillpoints)+1)*openangle/(n_fillpoints+1) )%(2*pi)
+                        angles       = (phi1 - (np.arange(n_fillpoints)+1)*openangle/(n_fillpoints+1) )%(2*pi)
 
-                    radii        = (N.arange(n_fillpoints)+1)*radius_diff/(n_fillpoints+1) + r1
+                    radii        = (np.arange(n_fillpoints)+1)*radius_diff/(n_fillpoints+1) + r1
 
-                    fill_array[:,0] = radii * N.sin(angles)
-                    fill_array[:,1] = radii * N.cos(angles)
+                    fill_array[:,0] = radii * np.sin(angles)
+                    fill_array[:,1] = radii * np.cos(angles)
 
-                    smoothed_array = N.append(smoothed_array,fill_array,axis=0)
+                    smoothed_array = np.append(smoothed_array,fill_array,axis=0)
 
-                smoothed_array = N.append(smoothed_array,[obj[idx+1]],axis=0)
+                smoothed_array = np.append(smoothed_array,[obj[idx+1]],axis=0)
 
 
             setattr(self,'_'+curve2smooth+'_final',smoothed_array.transpose())
@@ -3548,21 +3548,21 @@ class BeachBall:
         mask_neg_in_pos = 0
         for neg_point in lo_points_in_neg_curve:
             #mask_neg_in_pos *=  self._point_inside_polygon(neg_point[0], neg_point[1],lo_points_in_pos_curve )
-            mask_neg_in_pos +=  self._pnpoly(N.array(lo_points_in_pos_curve),N.array([neg_point[0], neg_point[1]]) )
+            mask_neg_in_pos +=  self._pnpoly(np.array(lo_points_in_pos_curve),np.array([neg_point[0], neg_point[1]]) )
         if mask_neg_in_pos > len(lo_points_in_neg_curve)-3:
             self._plot_curve_in_curve  =   1
 
         # check, if positive curve completely within negative curve
         mask_pos_in_neg = 0
         for pos_point in lo_points_in_pos_curve:
-            mask_pos_in_neg +=  self._pnpoly(N.array(lo_points_in_neg_curve),N.array([pos_point[0], pos_point[1]]) )
+            mask_pos_in_neg +=  self._pnpoly(np.array(lo_points_in_neg_curve),np.array([pos_point[0], pos_point[1]]) )
         if mask_pos_in_neg > len(lo_points_in_pos_curve)-3:
             self._plot_curve_in_curve  =   -1
 
 
         #correct for ONE special case: double couple with its eigensystem = NED basis system:
         testarray = [1.,0,0,0,1,0,0,0,1]
-        if N.prod(self.MT._rotation_matrix.A1 == testarray) and (self.MT._eigenvalues[1]==0 ):
+        if np.prod(self.MT._rotation_matrix.A1 == testarray) and (self.MT._eigenvalues[1]==0 ):
             self._plot_curve_in_curve = -1
             self._plot_clr_order      =  1
 
@@ -3605,8 +3605,8 @@ class BeachBall:
         xpi = verts[:,0]
         ypi = verts[:,1]
         # shift
-        xpj = xpi[N.arange(xpi.size)-1]
-        ypj = ypi[N.arange(ypi.size)-1]
+        xpj = xpi[np.arange(xpi.size)-1]
+        ypj = ypi[np.arange(ypi.size)-1]
 
         possible_crossings = ((ypi <= y) & (y < ypj)) | ((ypj <= y) & (y < ypi))
 
@@ -3636,7 +3636,7 @@ class BeachBall:
         for obj2proj in list_of_objects_2_project:
             obj = getattr(self,'_'+obj2proj).transpose().copy()
             for idx,val in enumerate(obj):
-                old_radius = N.sqrt(val[0]**2+val[1]**2)
+                old_radius = np.sqrt(val[0]**2+val[1]**2)
                 if old_radius > 1:
                     obj[idx,0] = val[0]/old_radius
                     obj[idx,1] = val[1]/old_radius
@@ -3648,10 +3648,10 @@ class BeachBall:
 
             tmp_obj = []
             for idx,val in enumerate(obj):
-                old_radius = N.sqrt(val[0]**2+val[1]**2)
+                old_radius = np.sqrt(val[0]**2+val[1]**2)
                 if old_radius <=  1+epsilon:
                     tmp_obj.append(val)
-            tmp_obj2 = N.array(tmp_obj).transpose()
+            tmp_obj2 = np.array(tmp_obj).transpose()
             tmp_obj3 = self._sort_curve_points(tmp_obj2)
 
             setattr(self,'_'+fp+'_US',tmp_obj3)
@@ -3659,10 +3659,10 @@ class BeachBall:
         lo_visible_EV = []
 
         for idx,val in enumerate(self._all_EV_2D.transpose()):
-            r_ev = N.sqrt(val[0]**2 + val[1]**2)
+            r_ev = np.sqrt(val[0]**2 + val[1]**2)
             if r_ev <= 1:
                 lo_visible_EV.append([val[0],val[1],idx])
-        visible_EVs = N.array(lo_visible_EV)
+        visible_EVs = np.array(lo_visible_EV)
 
         self._all_EV_2D_US = visible_EVs
 
@@ -3672,7 +3672,7 @@ class BeachBall:
         direction_letters = list('NSEWDU')
 
         for idx,val in enumerate(self._all_BV_2D.transpose()):
-            r_bv = N.sqrt(val[0]**2 + val[1]**2)
+            r_bv = np.sqrt(val[0]**2 + val[1]**2)
             if r_bv <= 1:
                 if idx == 1 and 'N' in dummy_list1:
                     continue
@@ -3684,7 +3684,7 @@ class BeachBall:
                     lo_visible_BV.append([val[0],val[1],idx])
                     dummy_list1.append(direction_letters[idx])
 
-        visible_BVs = N.array(lo_visible_BV)
+        visible_BVs = np.array(lo_visible_BV)
 
         self._all_BV_2D_US = visible_BVs
 
@@ -3835,7 +3835,7 @@ class BeachBall:
 
         #if isotropic part shall be displayed, fill the circle completely with the appropriate colour
         if self._pure_isotropic:
-            #f abs( N.trace( self._M )) > epsilon:
+            #f abs( np.trace( self._M )) > epsilon:
             if self._plot_clr_order < 0:
                 ax.fill( US[0,:],US[1,:],fc=tension_colour, alpha= 1,zorder=100 )
             else:
@@ -3862,13 +3862,13 @@ class BeachBall:
                 y_coord = val[1]
                 np_letter = direction_letters[int(val[2])]
 
-                rot_angle    = - N.arctan2(y_coord,x_coord) + pi/2.
-                original_rho = N.sqrt(x_coord**2 + y_coord**2)
+                rot_angle    = - np.arctan2(y_coord,x_coord) + pi/2.
+                original_rho = np.sqrt(x_coord**2 + y_coord**2)
 
-                marker_x  = ( original_rho - ( 1.5* symsize  / points_per_unit ) ) * N.sin( rot_angle )
-                marker_y  = ( original_rho - ( 1.5* symsize  / points_per_unit ) ) * N.cos( rot_angle )
-                annot_x   = ( original_rho - ( 4.5* fontsize / points_per_unit ) ) * N.sin( rot_angle )
-                annot_y   = ( original_rho - ( 4.5* fontsize / points_per_unit ) ) * N.cos( rot_angle )
+                marker_x  = ( original_rho - ( 1.5* symsize  / points_per_unit ) ) * np.sin( rot_angle )
+                marker_y  = ( original_rho - ( 1.5* symsize  / points_per_unit ) ) * np.cos( rot_angle )
+                annot_x   = ( original_rho - ( 4.5* fontsize / points_per_unit ) ) * np.sin( rot_angle )
+                annot_y   = ( original_rho - ( 4.5* fontsize / points_per_unit ) ) * np.cos( rot_angle )
 
                 ax.text(annot_x,annot_y,np_letter,horizontalalignment='center', size=fontsize,weight='bold', verticalalignment='center',\
                         bbox=dict(edgecolor='white',facecolor='white', alpha=1))
@@ -5166,7 +5166,7 @@ the respective double-couple- and CLVD-components by using:
     if not len(M_raw) in [3,4,6,7,9]:
         print '\nERROR!! Provide proper source mechanism\n\n'
         sys.exit()
-    if len(M_raw) in [4,6,7,9] and  len(N.array(M_raw).nonzero()[0]) == 0:
+    if len(M_raw) in [4,6,7,9] and  len(np.array(M_raw).nonzero()[0]) == 0:
         print '\nERROR!! Provide proper source mechanism\n\n'
         sys.exit()
 
