@@ -1,79 +1,15 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-
-"""
-
-#######################################################################
-#########################   MoPaD  ####################################
-
-######### Moment tensor Plotting and Decomposition tool #############
-#######################################################################
-
-Multi method tool for:
-
-- Plotting and saving of focal sphere diagrams ('Beachballs').
-
-- Decomposition and Conversion of seismic moment tensors.
-
-- Generating coordinates, describing a focal sphere diagram, to be
-piped into GMT's psxy (Useful where psmeca or pscoupe fail.)
-
-#######################################################################
-
-Version  0.9b
-
-THIS IS AN ALPHA VERSION -- FOR TESTING PURPOSES ONLY
-
-THIS SOFTWARE COMES WITH NO WARRANTY
-
-#######################################################################
-
-Copyright (C) 2010
-Lars Krieger & Sebastian Heimann
-
-Contact
-lars.krieger@zmaw.de  &  sebastian.heimann@zmaw.de
-
-#######################################################################
-
-License:
-
-GNU Lesser General Public License, Version 3
-
-This program is free software; you can redistribute it and/or
-modify it under the terms of the GNU Lesser General Public License
-as published by the Free Software Foundation; either version 3
-of the License, or (at your option) any later version.
-
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-GNU Lesser General Public License for more details.
-
-You should have received a copy of the GNU Lesser General Public License
-along with this program; if not, write to the Free Software
-Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
-02110-1301, USA.
-
-"""
-
-
-#
-
-mopad_version = 0.9
-
-
-# standard libraries:
-import sys
-import optparse
-import re
-import math
 from cStringIO import StringIO
-
-
-# additional library:
+import optparse
+import math
 import numpy as np
+import os
+import os.path
+import sys
+import re
+
+MOPAD_VERSION = 1.0
 
 
 # constants:
@@ -128,7 +64,11 @@ def wrap(text, line_length=80):
             else:
                 outlines.append(_indent + parout)
 
-        if ip != len(paragraphs) - 1 and (listindents[ip] is None or newlist[ip] is not None or listindents[ip + 1] is None):
+        if ip != len(paragraphs) - 1 and (
+                listindents[ip] is None or
+                newlist[ip] is not None or
+                listindents[ip + 1] is None):
+
             outlines.append('')
 
     return outlines
@@ -136,10 +76,14 @@ def wrap(text, line_length=80):
 
 def basis_switcher(in_system, out_system):
     from_ned = {
-        'NED': np.matrix([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]], dtype=np.float),
-        'USE': np.matrix([[0., -1., 0.], [0., 0., 1.], [-1., 0., 0.]], dtype=np.float).I,
-        'XYZ': np.matrix([[0., 1., 0.], [1., 0., 0.], [0., 0., -1.]], dtype=np.float).I,
-        'NWU': np.matrix([[1., 0., 0.], [0., -1., 0.], [0., 0., -1.]], dtype=np.float).I}
+        'NED': np.matrix([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]],
+                         dtype=np.float),
+        'USE': np.matrix([[0., -1., 0.], [0., 0., 1.], [-1., 0., 0.]],
+                         dtype=np.float).I,
+        'XYZ': np.matrix([[0., 1., 0.], [1., 0., 0.], [0., 0., -1.]],
+                         dtype=np.float).I,
+        'NWU': np.matrix([[1., 0., 0.], [0., -1., 0.], [0., 0., -1.]],
+                         dtype=np.float).I}
 
     return from_ned[in_system].I * from_ned[out_system]
 
@@ -189,10 +133,8 @@ class MopadHelpFormatter(optparse.IndentedHelpFormatter):
         return '\n'.join(wrap(description, desc_width)) + "\n"
 
 
-#------------------------------------------
 class MTError(Exception):
     pass
-#------------------------------------------
 
 
 def euler_to_matrix(alpha, beta, gamma):
@@ -231,6 +173,7 @@ class MomentTensor:
         [[0., 0., -1.], [0., 0., 0.], [-1., 0., 0.]], dtype=np.float)
 
     def __init__(self, M=None, in_system='NED', out_system='NED', debug=0):
+
         """
         Creates a moment tensor object on the basis of a provided mechanism M.
 
@@ -243,7 +186,6 @@ class MomentTensor:
         'system' may be chosen as 'NED','USE','NWU', or 'XYZ'.
 
         'debug' enables output on the shell at the intermediate steps.
-
         """
 
         self._original_M = M[:]
@@ -303,8 +245,8 @@ class MomentTensor:
                                         't', 'n', 'p')
 
         self._decomp_attrib_map = dict(zip(self._decomp_attrib_map_keys,
-                                           ('input_system', 'output_system', 'decomp_type',
-                                            'M',
+                                           ('input_system', 'output_system',
+                                            'decomp_type', 'M',
                                             'iso', 'iso_percentage',
                                             'devi', 'devi', 'devi_percentage',
                                             'DC', 'DC_percentage',
@@ -322,28 +264,30 @@ class MomentTensor:
         # set the appropriate principal axis system:
         self._M_to_principal_axis_system()
 
-    #---------------------------------------------------------------
-
     def _setup_M(self, mech, input_basis):
         """
         Brings the provided mechanism into symmetric 3x3 matrix form.
 
-
         The source mechanism may be provided in different forms:
 
-        -- as 3x3 matrix - symmetry is checked - one basis system has to be chosen, or NED as default is taken
-        -- as 3-element tuple or array - interpreted as strike, dip, slip-rake angles in degree
-        -- as 4-element tuple or array - interpreted as strike, dip, slip-rake angles in degree + seismic scalar moment in Nm
-        -- as 6-element tuple or array - interpreted as the 6 independent entries of the moment tensor
-        -- as 7-element tuple or array - interpreted as the 6 independent entries of the moment tensor + seismic scalar moment in Nm
-        -- as 9-element tuple or array - interpreted as the 9 entries of the moment tensor - checked for symmetry
-        -- as a nesting of one of the upper types (e.g. a list of n-tuples) - first element of outer nesting is taken
-
+        * as 3x3 matrix - symmetry is checked - one basis system has to be
+           chosen, or NED as default is taken
+        * as 3-element tuple or array - interpreted as strike, dip, slip-rake
+           angles in degree
+        * as 4-element tuple or array - interpreted as strike, dip, slip-rake
+          angles in degree + seismic scalar moment in Nm
+        * as 6-element tuple or array - interpreted as the 6 independent
+          entries of the moment tensor
+        * as 7-element tuple or array - interpreted as the 6 independent
+          entries of the moment tensor + seismic scalar moment in Nm
+        * as 9-element tuple or array - interpreted as the 9 entries of the
+          moment tensor - checked for symmetry
+        * as a nesting of one of the upper types (e.g. a list of n-tuples);
+          first element of outer nesting is taken
         """
-
         # set source mechanism to matrix form
 
-        if mech == None:
+        if mech is None:
             raise MTError('Please provide a mechanism')
 
         # if some stupid nesting occurs
@@ -368,7 +312,9 @@ class MomentTensor:
         elif len(mech) == 6 or len(mech) == 7:
             M = mech
             new_M = np.matrix(
-                np.array([M[0], M[3], M[4], M[3], M[1], M[5], M[4], M[5], M[2]]).reshape(3, 3))
+                np.array([M[0], M[3], M[4],
+                          M[3], M[1], M[5],
+                          M[4], M[5], M[2]]).reshape(3, 3))
 
             if len(mech) == 7:
                 new_M = M[6] * new_M
@@ -391,13 +337,12 @@ class MomentTensor:
 
         return basis_transform_matrix(np.matrix(new_M), input_basis, 'NED')
 
-    #---------------------------------------------------------------
     def _decompose_M(self):
         """
         Running the decomposition of the moment tensor object.
 
-        the standard decompositions M = Isotropic + DC + (CLVD or 2nd DC) are supported (C.f. Jost & Herrmann, Aki & Richards)
-
+        the standard decompositions M = Isotropic + DC + (CLVD or 2nd DC) are
+        supported (C.f. Jost & Herrmann, Aki & Richards)
         """
         k = self._decomposition_key
         d = MomentTensor.decomp_dict
@@ -407,38 +352,32 @@ class MomentTensor:
         else:
             raise MTError('Invalid decomposition key: %i' % k)
 
-    #---------------------------------------------------------------
-
     def print_decomposition(self):
         for arg in self._decomp_attrib_map_keys:
-            print getattr(self, 'get_' + self._decomp_attrib_map[arg])(style='y', system=self._output_basis)
+            getter = getattr(self, 'get_' + self._decomp_attrib_map[arg])
+            print getter(style='y', system=self._output_basis)
 
-    #---------------------------------------------------------------
     def _standard_decomposition(self):
         """
         Decomposition according Aki & Richards and Jost & Herrmann into
 
-        - isotropic
-        - deviatoric
-        - DC
-        - CLVD
+        isotropic + deviatoric
+        = isotropic + DC + CLVD
 
         parts of the input moment tensor.
 
-        results are given as attributes, which can be returned via 'get_<name of attribute>' functions:
+        results are given as attributes, callable via the get_* function:
 
-        DC
-        CLVD
-        DC_percentage
-        seismic_moment
-        moment_magnitude
-
+        DC, CLVD, DC_percentage, seismic_moment, moment_magnitude
         """
+
         M = self._M
 
         # isotropic part
-        M_iso = np.diag(
-            np.array([1. / 3 * np.trace(M), 1. / 3 * np.trace(M), 1. / 3 * np.trace(M)]))
+        M_iso = np.diag(np.array([1. / 3 * np.trace(M),
+                                 1. / 3 * np.trace(M),
+                                 1. / 3 * np.trace(M)]))
+
         M0_iso = abs(1. / 3 * np.trace(M))
 
         # deviatoric part
@@ -454,23 +393,19 @@ class MomentTensor:
         eigenw1, eigenv1 = np.linalg.eig(M_devi)
 
         # eigenvalues in ascending order:
-        eigenw = np.real(
-            np.take(eigenw1, np.argsort(abs(eigenwtot))))
-        eigenv = np.real(
-            np.take(eigenv1, np.argsort(abs(eigenwtot)), 1))
+        eigenw = np.real(np.take(eigenw1, np.argsort(abs(eigenwtot))))
+        eigenv = np.real(np.take(eigenv1, np.argsort(abs(eigenwtot)), 1))
 
         # eigenvalues in ascending order in absolute value!!:
-        eigenw_devi = np.real(
-            np.take(eigenw1, np.argsort(abs(eigenw1))))
-        eigenv_devi = np.real(
-            np.take(eigenv1, np.argsort(abs(eigenw1)), 1))
+        eigenw_devi = np.real(np.take(eigenw1, np.argsort(abs(eigenw1))))
+        eigenv_devi = np.real(np.take(eigenv1, np.argsort(abs(eigenw1)), 1))
 
         M0_devi = max(abs(eigenw_devi))
 
         # named according to Jost & Herrmann:
-        a1 = eigenv[:, 0]  # /np.linalg.norm(eigenv[:,0])
-        a2 = eigenv[:, 1]  # /np.linalg.norm(eigenv[:,1])
-        a3 = eigenv[:, 2]  # /np.linalg.norm(eigenv[:,2])
+        a1 = eigenv[:, 0]
+        a2 = eigenv[:, 1]
+        a3 = eigenv[:, 2]
 
         # if only isotropic part exists:
         if M0_devi < epsilon:
@@ -481,10 +416,8 @@ class MomentTensor:
         M_DC = np.matrix(np.zeros((9), float)).reshape(3, 3)
         M_CLVD = np.matrix(np.zeros((9), float)).reshape(3, 3)
 
-        M_DC = eigenw[2] * (1 - 2 * F) * (
-            np.outer(a3, a3) - np.outer(a2, a2))
-        M_CLVD      = M_devi - \
-            M_DC  # eigenw[2]*F*( 2*np.outer(a3,a3) - np.outer(a2,a2) - np.outer(a1,a1))
+        M_DC = eigenw[2] * (1 - 2 * F) * (np.outer(a3, a3) - np.outer(a2, a2))
+        M_CLVD = M_devi - M_DC
 
         # according to Bowers & Hudson:
         M0 = M0_iso + M0_devi
@@ -492,43 +425,37 @@ class MomentTensor:
         M_iso_percentage = int(round(M0_iso / M0 * 100, 6))
         self._iso_percentage = M_iso_percentage
 
-        M_DC_percentage = int(
-            round((1 - 2 * abs(F)) * (1 - M_iso_percentage / 100.) * 100, 6))
+        M_DC_percentage = int(round((1 - 2 * abs(F)) *
+                              (1 - M_iso_percentage / 100.) * 100, 6))
 
         self._DC = M_DC
         self._CLVD = M_CLVD
         self._DC_percentage = M_DC_percentage
 
-        #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment = M0
         self._moment_magnitude = np.log10(
             self._seismic_moment * 1.0e7) / 1.5 - 10.7
 
-    #---------------------------------------------------------------
     def _decomposition_w_2DC(self):
         """
         Decomposition according Aki & Richards and Jost & Herrmann into
 
-        - isotropic
-        - deviatoric
-        - 2 DC
+        isotropic + deviatoric
+        = isotropic + DC + DC2
 
         parts of the input moment tensor.
 
-        results are given as attributes, which can be returned via 'get_<name of attribute>' functions:
+        results are given as attributes, callable via the get_* function:
 
-        DC1
-        DC2
-        DC_percentage
-        seismic_moment
-        moment_magnitude
-
+        DC1, DC2, DC_percentage, seismic_moment, moment_magnitude
         """
         M = self._M
 
         # isotropic part
-        M_iso = np.diag(
-            np.array([1. / 3 * np.trace(M), 1. / 3 * np.trace(M), 1. / 3 * np.trace(M)]))
+        M_iso = np.diag(np.array([1. / 3 * np.trace(M),
+                                 1. / 3 * np.trace(M),
+                                 1. / 3 * np.trace(M)]))
+
         M0_iso = abs(1. / 3 * np.trace(M))
 
         # deviatoric part
@@ -576,7 +503,6 @@ class MomentTensor:
         self._moment_magnitude = np.log10(
             self._seismic_moment * 1.0e7) / 1.5 - 10.7
 
-    #---------------------------------------------------------------
     def _decomposition_w_CLVD_2DC(self):
         """
         Decomposition according to Dahm (1993) into
@@ -588,26 +514,19 @@ class MomentTensor:
 
         parts of the input moment tensor.
 
-        results are given as attributes, which can be returned via 'get_<name of attribute>' functions:
+        results are given as attributes, callable via the get_* function:
 
-        iso
-        CLVD
-        DC1
-        DC2
-        iso_percentage
-        DC_percentage
-        DC1_percentage
-        DC2_percentage
-        CLVD_percentage
-        seismic_moment
-        moment_magnitude
-
+        iso, CLVD, DC1, DC2, iso_percentage, DC_percentage, DC1_percentage,
+        DC2_percentage, CLVD_percentage, seismic_moment, moment_magnitude
         """
         M = self._M
 
         # isotropic part
         M_iso = np.diag(
-            np.array([1. / 3 * np.trace(M), 1. / 3 * np.trace(M), 1. / 3 * np.trace(M)]))
+            np.array([1. / 3 * np.trace(M),
+                      1. / 3 * np.trace(M),
+                      1. / 3 * np.trace(M)]))
+
         M0_iso = abs(1. / 3 * np.trace(M))
 
         # deviatoric part
@@ -627,7 +546,7 @@ class MomentTensor:
         M_DC2[0, 2] = M_DC2[2, 0] = M[0, 2]
         M_DC2[1, 2] = M_DC2[2, 1] = M[1, 2]
 
-        M_CLVD       =  1. / 3. * \
+        M_CLVD = 1. / 3. * \
             (0.5 * (M[1, 1] + M[0, 0]) - M[2, 2]) * \
             np.diag(np.array([1., 1., -2.]))
 
@@ -677,7 +596,6 @@ class MomentTensor:
         self._moment_magnitude = np.log10(
             self._seismic_moment * 1.0e7) / 1.5 - 10.7
 
-    #---------------------------------------------------------------
     def _decomposition_w_3DC(self):
         """
         Decomposition according Aki & Richards and Jost & Herrmann into
@@ -688,21 +606,16 @@ class MomentTensor:
 
         parts of the input moment tensor.
 
-        results are given as attributes, which can be returned via 'get_<name of attribute>' functions:
+        results are given as attributes, callable via the get_* function:
 
-        DC1
-        DC2
-        DC3
-        DC_percentage
-        seismic_moment
-        moment_magnitude
-
+        DC1, DC2, DC3, DC_percentage, seismic_moment, moment_magnitude
         """
         M = self._M
 
         # isotropic part
-        M_iso = np.diag(
-            np.array([1. / 3 * np.trace(M), 1. / 3 * np.trace(M), 1. / 3 * np.trace(M)]))
+        M_iso = np.diag(np.array([1. / 3 * np.trace(M),
+                                  1. / 3 * np.trace(M),
+                                  1. / 3 * np.trace(M)]))
         M0_iso = abs(1. / 3 * np.trace(M))
 
         # deviatoric part
@@ -733,17 +646,21 @@ class MomentTensor:
         M_DC2 = np.matrix(np.zeros((9), float)).reshape(3, 3)
         M_DC3 = np.matrix(np.zeros((9), float)).reshape(3, 3)
 
-        M_DC1        = 1. / 3. * \
+        M_DC1 = 1. / 3. * \
             (eigenw[0] - eigenw[1]) * (np.outer(a1, a1) - np.outer(a2, a2))
-        M_DC2        = 1. / 3. * \
+        M_DC2 = 1. / 3. * \
             (eigenw[1] - eigenw[2]) * (np.outer(a2, a2) - np.outer(a3, a3))
-        M_DC3        = 1. / 3. * \
+        M_DC3 = 1. / 3. * \
             (eigenw[2] - eigenw[0]) * (np.outer(a3, a3) - np.outer(a1, a1))
 
-        M_DC1_perc = int(
-            100 * abs((eigenw[0] - eigenw[1])) / (abs((eigenw[1] - eigenw[2])) + abs((eigenw[1] - eigenw[2])) + abs((eigenw[2] - eigenw[0]))))
-        M_DC2_perc = int(
-            100 * abs((eigenw[1] - eigenw[2])) / (abs((eigenw[1] - eigenw[2])) + abs((eigenw[1] - eigenw[2])) + abs((eigenw[2] - eigenw[0]))))
+        M_DC1_perc = int(100 * abs((eigenw[0] - eigenw[1])) /
+                         (abs((eigenw[1] - eigenw[2])) +
+                          abs((eigenw[1] - eigenw[2])) +
+                          abs((eigenw[2] - eigenw[0]))))
+        M_DC2_perc = int(100 * abs((eigenw[1] - eigenw[2])) /
+                         (abs((eigenw[1] - eigenw[2])) +
+                          abs((eigenw[1] - eigenw[2])) +
+                          abs((eigenw[2] - eigenw[0]))))
 
         self._DC = M_DC1
         self._DC2 = M_DC2
@@ -762,8 +679,6 @@ class MomentTensor:
         self._seismic_moment = M0
         self._moment_magnitude = np.log10(
             self._seismic_moment * 1.0e7) / 1.5 - 10.7
-
-    #---------------------------------------------------------------
 
     def _M_to_principal_axis_system(self):
         """
@@ -785,7 +700,6 @@ class MomentTensor:
         The eigensystem setup defines the colouring order for a later
         plotting in the BeachBall class. This order is set by the
         '_plot_clr_order' attribute.
-
         """
 
         M = self._M
@@ -794,7 +708,8 @@ class MomentTensor:
         # working in framework of 3 principal axes:
         # eigenvalues (EW) are in order from high to low
         # - neutral axis N, belongs to middle EW
-        # - symmetry axis S ('sigma') belongs to EW with largest absolute value (P- or T-axis)
+        # - symmetry axis S ('sigma') belongs to EW with largest absolute value
+        #   (P- or T-axis)
         # - auxiliary axis H ('help') belongs to remaining EW (T- or P-axis)
         # EW sorting from lowest to highest value
         EW_devi, EV_devi = np.linalg.eigh(M_devi)
@@ -819,7 +734,6 @@ class MomentTensor:
             for i, ew in enumerate(EW):
                 if abs(EW[i]) < epsilon:
                     EW[i] = 0
-        trace_M_devi = np.trace(M_devi)
 
         EW1_devi = EW_devi[EW_order[0]]
         EW2_devi = EW_devi[EW_order[1]]
@@ -835,11 +749,10 @@ class MomentTensor:
         EV2 = EV[:, EW_order[1]]
         EV3 = EV[:, EW_order[2]]
 
-        chng_basis_tmp = np.matrix(np.zeros((3, 3)))
+        chng_basis_tmp = np.asmatrix(np.zeros((3, 3)))
         chng_basis_tmp[:, 0] = EV1_devi
         chng_basis_tmp[:, 1] = EV2_devi
         chng_basis_tmp[:, 2] = EV3_devi
-        det_mat = np.linalg.det(chng_basis_tmp)
 
         symmetry_around_tension = 1
         clr = 1
@@ -850,17 +763,15 @@ class MomentTensor:
         # implosion
         if EW1 < 0 and EW2 < 0 and EW3 < 0:
             symmetry_around_tension = 0
-            #logger.debug( 'IMPLOSION - symmetry around pressure axis \n\n')
+            # logger.debug( 'IMPLOSION - symmetry around pressure axis \n\n')
             clr = 1
-
         # explosion
         elif EW1 > 0 and EW2 > 0 and EW3 > 0:
             symmetry_around_tension = 1
             if abs(EW1_devi) > abs(EW3_devi):
                 symmetry_around_tension = 0
-            #logger.debug( 'EXPLOSION - symmetry around tension axis \n\n')
+            # logger.debug( 'EXPLOSION - symmetry around tension axis \n\n')
             clr = -1
-
         # net-implosion
         elif EW2 < 0 and sum([EW1, EW2, EW3]) < 0:
             if abs(EW1_devi) < abs(EW3_devi):
@@ -869,7 +780,6 @@ class MomentTensor:
             else:
                 symmetry_around_tension = 1
                 clr = 1
-
         # net-implosion
         elif EW2_devi >= 0 and sum([EW1, EW2, EW3]) < 0:
             symmetry_around_tension = 0
@@ -877,7 +787,6 @@ class MomentTensor:
             if abs(EW1_devi) < abs(EW3_devi):
                 symmetry_around_tension = 1
                 clr = 1
-
         # net-explosion
         elif EW2_devi < 0 and sum([EW1, EW2, EW3]) > 0:
             symmetry_around_tension = 1
@@ -885,17 +794,14 @@ class MomentTensor:
             if abs(EW1_devi) > abs(EW3_devi):
                 symmetry_around_tension = 0
                 clr = -1
-
         # net-explosion
         elif EW2_devi >= 0 and sum([EW1, EW2, EW3]) > 0:
             symmetry_around_tension = 0
             clr = -1
-
         else:
             # TODO check: this point should never be reached !!
             pass
 
-        # test 26.9.2010:
         if abs(EW1_devi) < abs(EW3_devi):
             symmetry_around_tension = 1
             clr = 1
@@ -912,7 +818,8 @@ class MomentTensor:
         if (EW3 < 0 and np.trace(self._M) >= 0):
             # reaching this point means, we have a serious problem, likely of
             # numerical nature
-            print 'Houston, we have had a problem  - check M !!!!!! \n ( Trace(M) > 0, but largest eigenvalue is still negative)'
+            print 'Houston, we have had a problem  - check M !!!!!! \n' + \
+                  '( Trace(M) > 0, but largest eigenvalue is still negative)'
             raise MTError(' !! ')
 
         if trace_M == 0:
@@ -960,8 +867,7 @@ class MomentTensor:
         EVn = EV2
 
         # build the basis system change matrix:
-        chng_basis = np.matrix(np.zeros((3, 3)))
-        chng_fp_basis = np.matrix(np.zeros((3, 3)))
+        chng_basis = np.asmatrix(np.zeros((3, 3)))
 
         # order of eigenvector's basis: (H,N,S)
         chng_basis[:, 0] = EVh
@@ -983,19 +889,14 @@ class MomentTensor:
         # plotting order flag - important for plot in BeachBall class
         self._plot_clr_order = clr
 
-        # print clr
-
         # collection of the faultplanes, given in strike, dip, slip-rake
         self._faultplanes = self._find_faultplanes()
-
-    #---------------------------------------------------------------
 
     def _find_faultplanes(self):
         """
         Sets the two angle-triples, describing the faultplanes of the
         Double Couple, defined by the eigenvectors P and T of the
         moment tensor object.
-
 
         Define a reference Double Couple with strike = dip =
         slip-rake = 0, the moment tensor object's DC is transformed
@@ -1011,9 +912,11 @@ class MomentTensor:
         to check:
         using Sebastian's conventions:
 
-        rotationsmatrix1 = EV Matrix of M, but in order TNP (not as here  PNT!!!)
+        rotationsmatrix1 =
+           EV Matrix of M, but in order TNP (not as here PNT!!!)
 
-        reference-DC with strike, dip, rake = 0,0,0  in NED - form:  M = 0,0,0,0,-1,0
+        reference-DC with strike, dip, rake = 0,0,0
+           in NED - form:  M = 0,0,0,0,-1,0
 
         the eigenvectors of this into a Matrix:
 
@@ -1029,23 +932,22 @@ class MomentTensor:
 
         both matrices in matrix_2_euler
         )
-
         """
-
-        # reference Double Couple (in NED basis) - it has strike, dip,
-        # slip-rake = 0,0,0
-        refDC = np.matrix(
-            [[0., 0., -1.], [0., 0., 0.], [-1., 0., 0.]], dtype=np.float)
+        # reference Double Couple (in NED basis)
+        # it has strike, dip, slip-rake = 0,0,0
+        refDC = np.matrix([[0., 0., -1.], [0., 0., 0.], [-1., 0., 0.]],
+                          dtype=np.float)
         refDC_evals, refDC_evecs = np.linalg.eigh(refDC)
 
         # matrix which is turning from one fault plane to the other
-        flip_dc = np.matrix(
-            [[0., 0., -1.], [0., -1., 0.], [-1., 0., 0.]], dtype=np.float)
+        flip_dc = np.matrix([[0., 0., -1.], [0., -1., 0.], [-1., 0., 0.]],
+                            dtype=np.float)
 
         # euler-tools need matrices of EV sorted in PNT:
         pnt_sorted_EV_matrix = self._rotation_matrix.copy()
 
-        # re-sort only necessary, if abs(p) <= abs(t)
+        # resort only necessary, if abs(p) <= abs(t)
+        # print self._plot_clr_order
         if self._plot_clr_order < 0:
             pnt_sorted_EV_matrix[:, 0] = self._rotation_matrix[:, 2]
             pnt_sorted_EV_matrix[:, 2] = self._rotation_matrix[:, 0]
@@ -1055,12 +957,11 @@ class MomentTensor:
         # system of the reference Double Couple
         rot_matrix_fp1 = (np.dot(pnt_sorted_EV_matrix, refDC_evecs.T)).T
 
-        # check, if rotation has correct orientation
+        # check, if rotation has right orientation
         if np.linalg.det(rot_matrix_fp1) < 0.:
             rot_matrix_fp1 *= -1.
 
-        # adding a rotation into the (ambiguous) system of the second fault
-        # plane
+        # adding a rotation into the ambiguous system of the second fault plane
         rot_matrix_fp2 = np.dot(flip_dc, rot_matrix_fp1)
 
         fp1 = self._find_strike_dip_rake(rot_matrix_fp1)
@@ -1068,18 +969,13 @@ class MomentTensor:
 
         return [fp1, fp2]
 
-    #---------------------------------------------------------------
     def _find_strike_dip_rake(self, rotation_matrix):
         """
-        Returns tuple of angles (strike, dip, slip-rake) in degrees, describing the fault plane.
-
+        Returns angles strike, dip, slip-rake in degrees, describing the fault
+        plane.
         """
-
         (alpha, beta, gamma) = self._matrix_to_euler(rotation_matrix)
-
         return (beta * rad2deg, alpha * rad2deg, -gamma * rad2deg)
-
-    #-----------------------
 
     def _cvec(self, x, y, z):
         """
@@ -1087,14 +983,11 @@ class MomentTensor:
         """
         return np.matrix([[x, y, z]], dtype=np.float).T
 
-    #---------------------------------------------------------------
-
     def _matrix_to_euler(self, rotmat):
-        '''
-        Returns three Euler angles alpha, beta, gamma (in radians) from a rotation matrix.
-
-        '''
-
+        """
+        Returns three Euler angles alpha, beta, gamma (in radians) from a
+        rotation matrix.
+        """
         ex = self._cvec(1., 0., 0.)
         ez = self._cvec(0., 0., 1.)
         exs = rotmat.T * ex
@@ -1111,26 +1004,24 @@ class MomentTensor:
         alpha = np.arccos(cos_alpha)
         beta = np.mod(np.arctan2(enodes[1, 0], enodes[0, 0]), np.pi * 2.)
         gamma = np.mod(-np.arctan2(enodess[1, 0], enodess[0, 0]), np.pi * 2.)
-
         return self._unique_euler(alpha, beta, gamma)
 
-    #---------------------------------------------------------------
-
     def _unique_euler(self, alpha, beta, gamma):
-        '''Uniquify euler angle triplet.
+        """
+        Uniquify euler angle triplet.
 
-        Puts euler angles into ranges compatible with (dip,strike,-rake) in seismology:
+        Puts euler angles into ranges compatible with (dip,strike,-rake) in
+        seismology:
 
-        alpha (dip)   : [0, pi/2]
-        beta (strike) : [0, 2*pi)
-        gamma (-rake) : [-pi, pi)
+            alpha (dip)   : [0, pi/2]
+            beta (strike) : [0, 2*pi)
+            gamma (-rake) : [-pi, pi)
 
-        If alpha is near to zero, beta is replaced by beta+gamma and gamma is set to
-        zero, to prevent that additional ambiguity.
+        If alpha is near to zero, beta is replaced by beta+gamma and gamma is
+        set to zero, to prevent that additional ambiguity.
 
         If alpha is near to pi/2, beta is put into the range [0,pi).
-        '''
-
+        """
         alpha = np.mod(alpha, 2.0 * pi)
 
         if 0.5 * pi < alpha and alpha <= pi:
@@ -1146,7 +1037,7 @@ class MomentTensor:
             gamma = pi + gamma
 
         alpha = np.mod(alpha, 2.0 * pi)
-        beta = np.mod(beta,  2.0 * pi)
+        beta = np.mod(beta, 2.0 * pi)
         gamma = np.mod(gamma + pi, 2.0 * pi) - pi
 
         # If dip is exactly 90 degrees, one is still
@@ -1164,8 +1055,8 @@ class MomentTensor:
             beta = 0.
 
         if alpha == 0.5 * pi and beta >= pi:
-            gamma = - gamma
-            beta = np.mod(beta - pi,  2.0 * pi)
+            gamma = -gamma
+            beta = np.mod(beta - pi, 2.0 * pi)
             gamma = np.mod(gamma + pi, 2.0 * pi) - pi
             assert 0. <= beta < pi
             assert -pi <= gamma < pi
@@ -1175,16 +1066,14 @@ class MomentTensor:
             gamma = 0.
 
         return (alpha, beta, gamma)
-    #---------------------------------------------------------------
 
-    def _matrix_w_style_and_system(self, M2return, system, style='n'):
+    def _matrix_w_style_and_system(self, M2return, system, style):
         """
-        Returns the provided matrix transformed into the given basis system 'system'.
+        Transform matrix into the given basis system 'system'.
 
         If the argument 'style' is set to 'fancy', a 'print' of the return
         value yields a nice shell output of the matrix for better
         visual control.
-
         """
 
         M2return = basis_transform_matrix(M2return, 'NED', system.upper())
@@ -1194,19 +1083,20 @@ class MomentTensor:
         else:
             return M2return
 
-    #---------------------------------------------------------------
     def _vector_w_style_and_system(self, vectors, system, style='n'):
         """
-        Returns the provided vector(s) transformed into the given basis system 'system'.
+        Transform vector(s) into the given basis system 'system'.
 
         If the argument 'style' is set to 'fancy', a 'print' of the return
         value yields a nice shell output of the vector(s) for better
         visual control.
 
-        'vectors' can be either a single array, tuple, matrix or a collection in form of a list, array or matrix.
-        If it's a list, each entry will be checked, if it's 3D - if not, an exception is raised.
-        If it's a matrix or array with column-length 3, the columns are interpreted as vectors, otherwise, its transposed is used.
-
+        'vectors' can be either a single array, tuple, matrix or a collection
+        in form of a list, array or matrix.
+        If it's a list, each entry will be checked, if it's 3D - if not, an
+        exception is raised.
+        If it's a matrix or array with column-length 3, the columns are
+        interpreted as vectors, otherwise, its transposed is used.
         """
 
         fancy = style.lower() in ['f', 'fan', 'fancy', 'y']
@@ -1246,22 +1136,14 @@ class MomentTensor:
             else:
                 return lo_vecs_to_show
 
-    #---------------------------------------------------------------
-
     def get_M(self, system='NED', style='n'):
         """
         Returns the moment tensor in matrix representation.
 
-        Call with argument 'system' to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-
-        if style == 'y':
-            print '\n Full moment tensor in %s-coordinates: ' % (system)
-            return self._matrix_w_style_and_system(self._M, system, style)
-        else:
-            return self._matrix_w_style_and_system(self._M, system, style)
-
-    #---------------------------------------------------------------
+        return self._matrix_w_style_and_system(self._M, system, style)
 
     def get_decomposition(self, in_system='NED', out_system='NED', style='n'):
         """
@@ -1297,10 +1179,8 @@ class MomentTensor:
         -21 - p-axis                         (3-array)
         -22 - neutral axis                   (3-array)
         -23 - t-axis                         (3-array)
-
-
+        -24 - faultplanes       (list of two 3-arrays)
         """
-
         return [in_system, out_system, self.get_decomp_type(),
                 self.get_M(system=out_system),
                 self.get_iso(system=out_system), self.get_iso_percentage(),
@@ -1310,17 +1190,17 @@ class MomentTensor:
                 self.get_DC3(system=out_system), self.get_DC3_percentage(),
                 self.get_CLVD(system=out_system), self.get_CLVD_percentage(),
                 self.get_moment(), self.get_mag(),
-                self.get_eigvecs(system=out_system), self.get_eigvals(
-                    system=out_system),
-                self.get_p_axis(system=out_system), self.get_null_axis(
-                    system=out_system), self.get_t_axis(system=out_system),
+                self.get_eigvecs(system=out_system),
+                self.get_eigvals(system=out_system),
+                self.get_p_axis(system=out_system),
+                self.get_null_axis(system=out_system),
+                self.get_t_axis(system=out_system),
                 self.get_fps()]
-
-    #---------------------------------------------------------------
 
     def __str__(self):
         """
-        Nice compilation of decomposition result to be viewed in the shell (call with 'print').
+        Nice compilation of decomposition result to be viewed in the shell
+        (call with 'print').
         """
 
         mexp = pow(10, np.ceil(np.log10(np.max(np.abs(self._M)))))
@@ -1333,7 +1213,8 @@ class MomentTensor:
 
         s = '\nScalar Moment: M0 = %g Nm (Mw = %3.1f)\n'
         s += 'Moment Tensor: M%s = %6.3f,  M%s = %6.3f, M%s = %6.3f,\n'
-        s += '               M%s = %6.3f,  M%s = %6.3f, M%s = %6.3f    [ x %g ]\n\n'
+        s += '               M%s = %6.3f,  M%s = %6.3f, M%s = %6.3f'
+        s += '    [ x %g ]\n\n'
         s = s % (self._seismic_moment, self._moment_magnitude,
                  b(0, 0), m[0, 0],
                  b(1, 1), m[1, 1],
@@ -1345,36 +1226,30 @@ class MomentTensor:
 
         s += self._fault_planes_as_str()
         return s
-    #---------------------------------------------------------------
 
     def _fault_planes_as_str(self):
         """
-        Internal setup of a nice string, containing information about the fault planes.
+        Internal setup of a nice string, containing information about the fault
+        planes.
         """
         s = '\n'
         for i, sdr in enumerate(self.get_fps()):
-            s += 'Fault plane %i: strike = %3.0f°, dip = %3.0f°, slip-rake = %4.0f°\n' % \
-                 (i + 1, sdr[0], sdr[1], sdr[2])
+            s += 'Fault plane %i: ' % (i + 1)
+            s += 'strike = %3.0f°, dip = %3.0f°, slip-rake = %4.0f°\n' % \
+                 (sdr[0], sdr[1], sdr[2])
         return s
 
-   #---------------------------------------------------------------
     def get_input_system(self, style='n', **kwargs):
         """
         Returns the basis system of the input.
         """
-        if style == 'y':
-            print '\n Basis system of the input:\n   '
         return self._input_basis
-    #---------------------------------------------------------------
 
     def get_output_system(self, style='n', **kwargs):
         """
         Returns the basis system of the output.
         """
-        if style == 'y':
-            print '\n Basis system of the output: \n  '
         return self._output_basis
-    #---------------------------------------------------------------
 
     def get_decomp_type(self, style='n', **kwargs):
         """
@@ -1382,416 +1257,300 @@ class MomentTensor:
         """
 
         if style == 'y':
-            print '\n Decomposition type: \n  '
             return MomentTensor.decomp_dict[self._decomposition_key][0]
 
         return self._decomposition_key
 
-    #---------------------------------------------------------------
-
     def get_iso(self, system='NED', style='n'):
         """
-        Returns the isotropic part of the moment tensor in matrix representation.
+        Returns the isotropic part of the moment tensor in matrix
+        representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Isotropic part in %s-coordinates: \n' % (system)
         return self._matrix_w_style_and_system(self._isotropic, system, style)
-
-    #---------------------------------------------------------------
 
     def get_devi(self, system='NED', style='n'):
         """
-        Returns the  deviatoric part of the moment tensor in matrix representation.
+        Returns the deviatoric part of the moment tensor in matrix
+        representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Deviatoric part in %s-coordinates: \n' % (system)
         return self._matrix_w_style_and_system(self._deviatoric, system, style)
 
-    #---------------------------------------------------------------
     def get_DC(self, system='NED', style='n'):
         """
-        Returns the  Double Couple  part of the moment tensor in matrix representation.
+        Returns the Double Couple part of the moment tensor in matrix
+        representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Double Couple part in %s-coordinates: \n ' % (system)
-
         return self._matrix_w_style_and_system(self._DC, system, style)
-    #---------------------------------------------------------------
 
     def get_DC2(self, system='NED', style='n'):
         """
-        Returns the  second Double Couple  part of the moment tensor in matrix representation.
+        Returns the second Double Couple part of the moment tensor in matrix
+        representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Second Double Couple part in %s-coordinates: \n' % (system)
-        if self._DC2 == None:
+
+        if self._DC2 is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
 
         return self._matrix_w_style_and_system(self._DC2, system, style)
-    #---------------------------------------------------------------
 
     def get_DC3(self, system='NED', style='n'):
         """
-        Returns the third Double Couple  part of the moment tensor in matrix representation.
+        Returns the third Double Couple part of the moment tensor in matrix
+        representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Third Double Couple part in %s-coordinates: \n' % (system)
 
-        if self._DC3 == None:
+        if self._DC3 is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
+
         return self._matrix_w_style_and_system(self._DC3, system, style)
 
-    #---------------------------------------------------------------
     def get_CLVD(self, system='NED', style='n'):
         """
-        Returns the CLVD  part of the moment tensor in matrix representation.
+        Returns the CLVD part of the moment tensor in matrix representation.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n CLVD part in %s-coordinates: \n' % (system)
-        if self._CLVD == None:
+        if self._CLVD is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
 
         return self._matrix_w_style_and_system(self._CLVD, system, style)
 
-    #---------------------------------------------------------------
     def get_DC_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the DC part of the moment tensor in matrix representation.
+        Returns the percentage of the DC part of the moment tensor in matrix
+        representation.
         """
 
-        if style == 'y':
-            print '\n Double Couple percentage: \n'
         return self._DC_percentage
-    #---------------------------------------------------------------
 
     def get_CLVD_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the DC part of the moment tensor in matrix representation.
+        Returns the percentage of the DC part of the moment tensor in matrix
+        representation.
         """
 
-        if style == 'y':
-            print '\n CLVD percentage: \n'
-        if self._CLVD == None:
+        if self._CLVD is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
+
         return int(100 - self._iso_percentage - self._DC_percentage)
-    #---------------------------------------------------------------
 
     def get_DC2_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the second DC part of the moment tensor in matrix representation.
+        Returns the percentage of the second DC part of the moment tensor in
+        matrix representation.
         """
 
-        if style == 'y':
-            print "\n Second Double Couple's percentage: \n"
-        if self._DC2 == None:
+        if self._DC2 is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
+
         return self._DC2_percentage
-    #---------------------------------------------------------------
 
     def get_DC3_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the third DC part of the moment tensor in matrix representation.
+        Returns the percentage of the third DC part of the moment tensor in
+        matrix representation.
         """
 
-        if style == 'y':
-            print "\n Third Double Couple's percentage: \n"
-        if self._DC3 == None:
+        if self._DC3 is None:
             if style == 'y':
-                print ' not available in this decomposition type '
-            return ''
+                return 'not available in this decomposition type'
+            else:
+                return None
+
         return int(100 - self._DC2_percentage - self._DC_percentage)
 
-    #---------------------------------------------------------------
     def get_iso_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the isotropic part of the moment tensor in matrix representation.
+        Returns the percentage of the isotropic part of the moment tensor in
+        matrix representation.
         """
-        if style == 'y':
-            print '\n Isotropic percentage: \n'
         return self._iso_percentage
-    #---------------------------------------------------------------
 
     def get_devi_percentage(self, system='NED', style='n'):
         """
-        Returns the percentage of the deviatoric part of the moment tensor in matrix representation.
+        Returns the percentage of the deviatoric part of the moment tensor in
+        matrix representation.
         """
-        if style == 'y':
-            print '\n Deviatoric percentage: \n'
         return int(100 - self._iso_percentage)
 
-    #---------------------------------------------------------------
     def get_moment(self, system='NED', style='n'):
         """
         Returns the seismic moment (in Nm) of the moment tensor.
         """
-        if style == 'y':
-            print '\n Seismic moment (in Nm) : \n '
         return self._seismic_moment
 
-    #---------------------------------------------------------------
     def get_mag(self, system='NED', style='n'):
         """
         Returns the  moment magnitude M_w of the moment tensor.
         """
-        if style == 'y':
-            print '\n Moment magnitude Mw: \n '
         return self._moment_magnitude
 
-    #---------------------------------------------------------------
     def get_decomposition_key(self, system='NED', style='n'):
         """
         10 = standard decomposition (Jost & Herrmann)
         """
-        if style == 'y':
-            print '\n Decomposition key (standard = 10): \n '
         return self._decomposition_key
-
-    #---------------------------------------------------------------
 
     def get_eigvals(self, system='NED', style='n', **kwargs):
         """
         Returns a list of the eigenvalues of the moment tensor.
         """
         if style == 'y':
-            if self._plot_clr_order < 0:
-                print '\n Eigenvalues T N P :\n'
-
-            else:
-                print '\n Eigenvalues P N T :\n'
-
             return '%g, %g, %g' % tuple(self._eigenvalues)
 
         # in the order HNS:
         return self._eigenvalues
 
-    #---------------------------------------------------------------
     def get_eigvecs(self, system='NED', style='n'):
         """
         Returns the eigenvectors  of the moment tensor.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
+        return self._vector_w_style_and_system(self._eigenvectors, system,
+                                               style)
 
-            if self._plot_clr_order < 0:
-                print '\n Eigenvectors T N P (in basis system %s): ' % (system)
-            else:
-                print '\n Eigenvectors P N T (in basis system %s): ' % (system)
-
-        return self._vector_w_style_and_system(self._eigenvectors,  system, style)
-
-    #---------------------------------------------------------------
     def get_null_axis(self, system='NED', style='n'):
         """
         Returns the neutral axis of the moment tensor.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-
-        if style == 'y':
-            print '\n Null-axis in %s -coordinates: ' % (system)
 
         return self._vector_w_style_and_system(self._null_axis,  system, style)
 
-    #---------------------------------------------------------------
     def get_t_axis(self, system='NED', style='n'):
         """
         Returns the tension axis of the moment tensor.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n Tension-axis in %s -coordinates: ' % (system)
         return self._vector_w_style_and_system(self._t_axis,  system, style)
 
-    #---------------------------------------------------------------
     def get_p_axis(self, system='NED', style='n'):
         """
         Returns the pressure axis of the moment tensor.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-
-        if style == 'y':
-            print '\n Pressure-axis in %s -coordinates: ' % (system)
         return self._vector_w_style_and_system(self._p_axis,  system, style)
 
-    #---------------------------------------------------------------
     def get_transform_matrix(self, system='NED', style='n'):
         """
-        Returns the  transformation matrix (input system to principal axis system.
+        Returns the transformation matrix (input system to principal axis
+        system.
 
-        Call with arguments to set ouput in other basis system or in fancy style (to be viewed with 'print')
+        Call with arguments to set ouput in other basis system or in fancy
+        style (to be viewed with 'print')
         """
-        if style == 'y':
-            print '\n rotation matrix in %s -coordinates: ' % (system)
-        return self._matrix_w_style_and_system(self._rotation_matrix, system, style)
+        return self._matrix_w_style_and_system(self._rotation_matrix, system,
+                                               style)
 
-    #---------------------------------------------------------------
     def get_fps(self, **kwargs):
         """
-        Returns a list of the two faultplane 3-tuples, each showing strike, dip, slip-rake.
+        Returns a list of the two faultplane 3-tuples, each showing strike,
+        dip, slip-rake.
         """
         fancy_key = kwargs.get('style', '0')
         if fancy_key[0].lower() == 'y':
             return self._fault_planes_as_str()
         else:
             return self._faultplanes
-    #---------------------------------------------------------------
 
     def get_colour_order(self, **kwargs):
         """
-        Returns the value of the plotting order (only important in BeachBall instances).
+        Returns the value of the plotting order (only important in BeachBall
+        instances).
         """
         style = kwargs.get('style', '0')[0].lower()
-        if style == 'y':
-            print '\n Colour order key: '
         return self._plot_clr_order
 
-
 MomentTensor.decomp_dict = {
-    1: ('ISO + DC + CLVD',                 MomentTensor._standard_decomposition),
-    2: ('ISO + major DC + minor DC',       MomentTensor._decomposition_w_2DC),
-    3: ('ISO + DC1 + DC2 + DC3',           MomentTensor._decomposition_w_3DC),
-    4: ('ISO + strike DC + dip DC + CLVD', MomentTensor._decomposition_w_CLVD_2DC),
+    1: ('ISO + DC + CLVD',
+        MomentTensor._standard_decomposition),
+    2: ('ISO + major DC + minor DC',
+        MomentTensor._decomposition_w_2DC),
+    3: ('ISO + DC1 + DC2 + DC3',
+        MomentTensor._decomposition_w_3DC),
+    4: ('ISO + strike DC + dip DC + CLVD',
+        MomentTensor._decomposition_w_CLVD_2DC),
 }
 
 
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#
-#   external functions:
-#
-#---------------------------------------------------------------
-
-
-def strikediprake_2_moments(strike, dip, rake):
-    """
-    Return 6-tuple containing entries of M, calculated from fault plane angles (defined as in Jost&Herman), given in degrees.
-
-    strike: angle clockwise between north and plane ( in [0,360[ )
-    dip:    angle between surface and dipping plane ( in [0,90] ) 0 = horizontal, 90 = vertical
-    rake:   angle on the rupture plane between strike vector and actual movement (defined mathematically positive: ccw rotation is positive)
-
-    basis for output is NED (= X,Y,Z)
-
-    output:
-
-    M = M_nn, M_ee, M_dd, M_ne, M_nd, M_ed
-
-    """
-
-    S_rad = strike / rad2deg
-    D_rad = dip / rad2deg
-    R_rad = rake / rad2deg
-
-    for ang in S_rad, D_rad, R_rad:
-        if abs(ang) < epsilon:
-            ang = 0.
-
-    M1 = - (np.sin(D_rad) * np.cos(R_rad) * np.sin(2 * S_rad)
-            + np.sin(2 * D_rad) * np.sin(R_rad) * np.sin(S_rad) ** 2)
-    M2 = (np.sin(D_rad) * np.cos(R_rad) * np.sin(2 * S_rad)
-          - np.sin(2 * D_rad) * np.sin(R_rad) * np.cos(S_rad) ** 2)
-    M3 = (np.sin(2 * D_rad) * np.sin(R_rad))
-    M4 = (np.sin(D_rad) * np.cos(R_rad) * np.cos(2 * S_rad)
-          + 0.5 * np.sin(2 * D_rad) * np.sin(R_rad) * np.sin(2 * S_rad))
-    M5 = - (np.cos(D_rad) * np.cos(R_rad) * np.cos(S_rad)
-            + np.cos(2 * D_rad) * np.sin(R_rad) * np.sin(S_rad))
-    M6 = - (np.cos(D_rad) * np.cos(R_rad) * np.sin(S_rad)
-            - np.cos(2 * D_rad) * np.sin(R_rad) * np.cos(S_rad))
-
-    Moments = [M1, M2, M3, M4, M5, M6]
-
-    return tuple(Moments)
-
-#-------------------------------------------------------------------
-
-
 def fancy_matrix(m_in):
-    """
-
-    Returns a given 3x3 matrix or array in a cute way on the shell, if you use 'print' on the return value.
-
-    """
     m = m_in.copy()
 
-    #    aftercom   = 1
-    #    maxlen =  (int(np.log10(np.max(np.abs(m)))))
-    #     if maxlen < 0:
-    #         aftercom = -maxlen + 1
-    #         maxlen   = 1
-
     norm_factor = round(max(abs(np.array(m).flatten())), 5)
-
-    # print m
-    # print norm_factor
 
     try:
         if (norm_factor < 0.1) or (norm_factor >= 10):
             if not abs(norm_factor) == 0:
                 m = m / norm_factor
-
-                return "\n  / %5.2F %5.2F %5.2F \\\n" % (m[0, 0], m[0, 1], m[0, 2]) +\
-                       "  | %5.2F %5.2F %5.2F  |   x  %F\n"  % (m[1, 0], m[1, 1], m[1, 2], norm_factor) +\
-                       "  \\ %5.2F %5.2F %5.2F /\n" % (
-                           m[2, 0], m[2, 1], m[2, 2])
+                out = "\n  / %5.2F %5.2F %5.2F \\\n" % \
+                    (m[0, 0], m[0, 1], m[0, 2])
+                out += "  | %5.2F %5.2F %5.2F  |   x  %F\n" % \
+                    (m[1, 0], m[1, 1], m[1, 2], norm_factor)
+                out += "  \\ %5.2F %5.2F %5.2F /\n" % \
+                    (m[2, 0], m[2, 1], m[2, 2])
+                return out
     except:
         pass
 
-    return "\n  / %5.2F %5.2F %5.2F \\\n" % (m[0, 0], m[0, 1], m[0, 2]) +\
-           "  | %5.2F %5.2F %5.2F  | \n"  % (m[1, 0], m[1, 1], m[1, 2]) +\
+    return "\n  / %5.2F %5.2F %5.2F \\\n" % (m[0, 0], m[0, 1], m[0, 2]) + \
+           "  | %5.2F %5.2F %5.2F  | \n" % (m[1, 0], m[1, 1], m[1, 2]) + \
            "  \\ %5.2F %5.2F %5.2F /\n" % (m[2, 0], m[2, 1], m[2, 2])
 
 
-#-------------------------------------------------------------------
-
 def fancy_vector(v):
     """
-
-    Returns a given 3-vector or array in a cute way on the shell, if you use 'print' on the return value.
-
+    Returns a given 3-vector or array in a cute way on the shell, if you
+    use 'print' on the return value.
     """
-    return "\n  / %5.2F \\\n" % (v[0]) +\
-        "  | %5.2F  |\n"  % (v[1]) +\
+    return "\n  / %5.2F \\\n" % (v[0]) + \
+        "  | %5.2F  |\n" % (v[1]) + \
         "  \\ %5.2F /\n" % (v[2])
 
 
-#
-#
-#---------------------------------------------------------------
-#---------------------------------------------------------------
-#
-#   Class for plotting:
-#
-#---------------------------------------------------------------
 class BeachBall:
 
     """
-    Class for generating a beachball projection for a provided moment tensor object.
-
+    Class for generating a beachball projection for a provided moment tensor
+    object.
 
     Input for instance generation: MomentTensor object [,keywords dictionary]
 
@@ -1803,99 +1562,49 @@ class BeachBall:
 
     Beside the plots, the unit sphere projection may be saved in a given file.
 
-    Alternatively, only the file can be provided without showing anything directly.
-
+    Alternatively, only the file can be provided without showing anything
+    directly.
     """
-
-    def __init__(self, MT=MomentTensor, kwargs_dict={}):
-
+    def __init__(self, MT=MomentTensor, kwargs_dict={}, npoints=360):
         self.MT = MT
-
         self._M = MT._M
-
         self._set_standard_attributes()
-
         self._update_attributes(kwargs_dict)
 
+        self._plot_n_points = npoints
         self._nodallines_in_NED_system()
+        self.arange_1 = np.arange(3 * npoints) - 1
+        # self._identify_faultplanes()
 
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-    def ploBB(self, kwargs={}):
+    def ploBB(self, kwargs, ax=None):
         """
-        Method for plotting the projection of the beachball onto a unit sphere.
-
-        Module matplotlib (pylab) must be installed !!!
-
-
-        Input:
-        dictionary with keywords
-
-
+        Plots the projection of the beachball onto a unit sphere.
         """
-
-        # updating keywords
         self._update_attributes(kwargs)
-
-        # setting up the beachball geometry
         self._setup_BB()
+        self._plot_US(ax=ax)
 
-        # generate plot of a unit sphere
-        # either full beachball, or most likely projection of one hemisphere
-        self._plot_US()
-
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-
-    def save_BB(self, kwargs={}):
+    def save_BB(self, kwargs):
         """
-        Method for saving the 2D projection of the beachball without showing the plot.
+        Method for saving the 2D projection of the beachball without showing
+        the plot.
 
-        Module matplotlib (pylab) must be installed !!!
-
-        Input:
-        keyword dictionary
-
-        required keyword arguments:
-
-        - outfile : name of outfile, addressing w.r.t. current directory
-
+        :param outfile: name of outfile, addressing w.r.t. current directory
+        :param format: if no implicit valid format is provided within the
+            filename, add file format
         """
-
-        # updating keywords
         self._update_attributes(kwargs)
-
-        # setting up the beachball geometry
         self._setup_BB()
-
-        # generate plot of a unit sphere and strore into file directly
-        # either full beachball, or most likely projection of one hemisphere
         self._just_save_bb()
-
-    #-------------------------------------------------------------------
 
     def _just_save_bb(self):
         """
-        Internal method for saving the beachball unit sphere plot into a given  file.
+        Internal method for saving the beachball unit sphere plot into a given
+        file.
 
-        This method tries to setup the approprite backend according to the requested file format first. 'AGG' is used in most cases.
+        This method tries to setup the approprite backend according to the
+        requested file format first. 'AGG' is used in most cases.
         """
-
-        try:
-            del matplotlib
-        except:
-            pass
-        try:
-            del pylab
-        except:
-            pass
-        try:
-            del P
-        except:
-            pass
-
         import matplotlib
 
         if self._plot_outfile_format == 'svg':
@@ -1903,34 +1612,27 @@ class BeachBall:
                 matplotlib.use('SVG')
             except:
                 matplotlib.use('Agg')
-
-        if self._plot_outfile_format == 'pdf':
+        elif self._plot_outfile_format == 'pdf':
             try:
                 matplotlib.use('PDF')
             except:
                 matplotlib.use('Agg')
                 pass
-
-        if self._plot_outfile_format == 'ps':
+        elif self._plot_outfile_format == 'ps':
             try:
                 matplotlib.use('PS')
-
             except:
                 matplotlib.use('Agg')
                 pass
-
-        if self._plot_outfile_format == 'eps':
+        elif self._plot_outfile_format == 'eps':
             try:
                 matplotlib.use('Agg')
-
             except:
                 matplotlib.use('PS')
                 pass
-
-        if self._plot_outfile_format == 'png':
+        elif self._plot_outfile_format == 'png':
             try:
                 matplotlib.use('AGG')
-
             except:
                 mp_out = matplotlib.use('GTKCairo')
                 if mp_out:
@@ -1940,7 +1642,6 @@ class BeachBall:
 
         # finally generating the actual plot
         import pylab as P
-        import os
 
         plotfig = self._setup_plot_US(P)
 
@@ -1952,42 +1653,33 @@ class BeachBall:
 
         # save plot into file
         try:
-            plotfig.savefig(
-                outfile_abs_name, dpi=self._plot_dpi, transparent=True,
-                format=outfile_format)
-
+            plotfig.savefig(outfile_abs_name, dpi=self._plot_dpi,
+                            transparent=True, format=outfile_format)
         except:
             print 'ERROR!! -- Saving of plot not possible'
             return
-
-        # closing all opened plot windows
-        P.close('all')
-
-        # remove plot modules from memory
+        P.close(667)
         del P
         del matplotlib
 
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-
-    def get_psxy(self, kwargs={}):
+    def get_psxy(self, kwargs):
         """
-        Method returning one single string, which can be piped into the psxy method of the GMT package.
+        Method returning one single string, which can be piped into the psxy
+        method of the GMT package.
 
-
-        keyword arguments and defaults:
-
-
-        - GMT_type             = fill/lines/EVs (select type of string - default = fill)
-        - GMT_scaling          = 1.             (scale the beachball - original radius is 1)
-        - GMT_tension_colour   = 1              (tension area of BB -- colour flag for -Z in psxy)
-        - GMT_pressure_colour  = 0              (pressure area of BB -- colour flag for -Z in psxy)
-        - GMT_show_2FPs        = 0              (flag, if both faultplanes are to be shown)
-        - GMT_show_1FP         = 1              (flag, if one faultplane is to be shown)
-        - GMT_FP_index         = 2              (which faultplane -- 1 or 2 )
-
+        :param GMT_type: fill/lines/EVs (select type of string),
+            default is 'fill'
+        :param GMT_scaling: scale the beachball - default radius is 1.0
+        :param GMT_tension_colour: tension area of BB - colour flag for -Z in
+            psxy, default is 1
+        :param GMT_pressure_colour: pressure area of BB - colour flag for -Z in
+            psxy, default is 0
+        :param GMT_show_2FPs: flag, if both faultplanes are to be shown,
+            default is 0
+        :param GMT_show_1FP: flag, if one faultplane is to be shown, default
+            is 1
+        :param GMT_FP_index: 1 or 2, default is 2
         """
-
         self._GMT_type = 'fill'
         self._GMT_2fps = False
         self._GMT_1fp = 0
@@ -2017,26 +1709,20 @@ class BeachBall:
 
         return GMT_string
 
-    #---------------------------------------------------------------
-
     def _add_2_GMT_string(self, FH_string, curve, colour):
         """
-        Writes coordinate pair list of given curve  as string into temporal file handler.
+        Writes coordinate pair list of given curve  as string into temporal
+        file handler.
         """
-
         colour_Z = colour
-
         wstring = '> -Z%i\n' % (colour_Z)
         FH_string.write(wstring)
         np.savetxt(FH_string, self._GMT_scaling * curve.transpose())
-
-    #-------------------------------------------------------------------
 
     def _set_GMT_attributes(self):
         """
         Set the beachball lines and nodals as strings into a file handler.
         """
-
         neg_nodalline = self._nodalline_negative_final_US
         pos_nodalline = self._nodalline_positive_final_US
         FP1_2_plot = self._FP1_final_US
@@ -2057,82 +1743,75 @@ class BeachBall:
 
         if self._plot_clr_order > 0:
             self._add_2_GMT_string(GMT_string_FH, US, pressure_colour)
-            self._add_2_GMT_string(
-                GMT_string_FH, neg_nodalline, tension_colour)
-            self._add_2_GMT_string(
-                GMT_string_FH, pos_nodalline, tension_colour)
+            self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                   tension_colour)
+            self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                   tension_colour)
             GMT_string_FH.flush()
 
             if self._plot_curve_in_curve != 0:
                 self._add_2_GMT_string(GMT_string_FH, US, tension_colour)
 
                 if self._plot_curve_in_curve < 1:
-                    self._add_2_GMT_string(
-                        GMT_string_FH, neg_nodalline, pressure_colour)
-                    self._add_2_GMT_string(
-                        GMT_string_FH, pos_nodalline, tension_colour)
-
+                    self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                           pressure_colour)
+                    self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                           tension_colour)
                     GMT_string_FH.flush()
-
                 else:
-                    self._add_2_GMT_string(
-                        GMT_string_FH, pos_nodalline, pressure_colour)
-                    self._add_2_GMT_string(
-                        GMT_string_FH, neg_nodalline, tension_colour)
-
+                    self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                           pressure_colour)
+                    self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                           tension_colour)
                     GMT_string_FH.flush()
-
         else:
             self._add_2_GMT_string(GMT_string_FH, US, tension_colour)
-            self._add_2_GMT_string(
-                GMT_string_FH, neg_nodalline, pressure_colour)
-            self._add_2_GMT_string(
-                GMT_string_FH, pos_nodalline, pressure_colour)
+            self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                   pressure_colour)
+            self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                   pressure_colour)
             GMT_string_FH.flush()
 
             if self._plot_curve_in_curve != 0:
                 self._add_2_GMT_string(GMT_string_FH, US, pressure_colour)
-
                 if self._plot_curve_in_curve < 1:
-                    self._add_2_GMT_string(
-                        GMT_string_FH, neg_nodalline, tension_colour)
-                    self._add_2_GMT_string(
-                        GMT_string_FH, pos_nodalline, pressure_colour)
-
+                    self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                           tension_colour)
+                    self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                           pressure_colour)
                     GMT_string_FH.flush()
-
                 else:
-                    self._add_2_GMT_string(
-                        GMT_string_FH, pos_nodalline, tension_colour)
-                    self._add_2_GMT_string(
-                        GMT_string_FH, neg_nodalline, pressure_colour)
+                    self._add_2_GMT_string(GMT_string_FH, pos_nodalline,
+                                           tension_colour)
+                    self._add_2_GMT_string(GMT_string_FH, neg_nodalline,
+                                           pressure_colour)
 
                     GMT_string_FH.flush()
 
         # set all nodallines and faultplanes for plotting:
-        #
-        self._add_2_GMT_string(
-            GMT_linestring_FH, neg_nodalline, tension_colour)
-        self._add_2_GMT_string(
-            GMT_linestring_FH, pos_nodalline, tension_colour)
+        self._add_2_GMT_string(GMT_linestring_FH, neg_nodalline,
+                               tension_colour)
+        self._add_2_GMT_string(GMT_linestring_FH, pos_nodalline,
+                               tension_colour)
 
         if self._GMT_2fps:
-            self._add_2_GMT_string(
-                GMT_linestring_FH, FP1_2_plot, tension_colour)
-            self._add_2_GMT_string(
-                GMT_linestring_FH, FP2_2_plot, tension_colour)
+            self._add_2_GMT_string(GMT_linestring_FH, FP1_2_plot,
+                                   tension_colour)
+            self._add_2_GMT_string(GMT_linestring_FH, FP2_2_plot,
+                                   tension_colour)
 
         elif self._GMT_1fp:
             if not int(self._GMT_1fp) in [1, 2]:
-                print 'no fault plane specified for being plotted...continue without fault plane(s)'
+                print 'no fault plane specified for being plotted...continue',
+                print 'without fault plane(s)'
                 pass
             else:
                 if int(self._GMT_1fp) == 1:
-                    self._add_2_GMT_string(
-                        GMT_linestring_FH, FP1_2_plot, tension_colour)
+                    self._add_2_GMT_string(GMT_linestring_FH, FP1_2_plot,
+                                           tension_colour)
                 else:
-                    self._add_2_GMT_string(
-                        GMT_linestring_FH, FP2_2_plot, tension_colour)
+                    self._add_2_GMT_string(GMT_linestring_FH, FP2_2_plot,
+                                           tension_colour)
 
         self._add_2_GMT_string(GMT_linestring_FH, US, tension_colour)
 
@@ -2142,55 +1821,36 @@ class BeachBall:
         setattr(self, '_GMT_psxy_fill', GMT_string_FH)
         setattr(self, '_GMT_psxy_EVs', GMT_EVs_FH)
 
-    #-------------------------------------------------------------------
     def get_MT(self):
         """
-        Returns the original moment tensor object, handed over to the class at generating this instance.
+        Returns the original moment tensor object, handed over to the class at
+        generating this instance.
         """
         return self.MT
 
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-
-    def full_sphere_plot(self, kwargs={}):
+    def full_sphere_plot(self, kwargs):
         """
-        Method for plotting the full beachball, projected on a circle with a radius 2.
-
-        Module matplotlib (pylab) must be installed !!!
-
-
-        Input:
-        keyword dictionary
-
-
-        required keyword arguments:
-        none
-
+        Plot of the full beachball, projected on a circle with a radius 2.
         """
-
         self._update_attributes(kwargs)
-
         self._setup_BB()
-
         self._aux_plot()
-
-    #-------------------------------------------------------------------
 
     def _aux_plot(self):
         """
-        Generates the final plot of the total sphere (according to the chosen 2D-projection.
-
+        Generates the final plot of the total sphere (according to the chosen
+        2D-projection.
         """
-        import matplotlib
         from matplotlib import interactive
         import pylab as P
 
         P.close('all')
-        plotfig = P.figure(
-            665, figsize=(self._plot_aux_plot_size, self._plot_aux_plot_size))
+        plotfig = P.figure(665, figsize=(self._plot_aux_plot_size,
+                                         self._plot_aux_plot_size))
 
         plotfig.subplots_adjust(left=0, bottom=0, right=1, top=1)
         ax = plotfig.add_subplot(111, aspect='equal')
+        # P.axis([-1.1,1.1,-1.1,1.1],'equal')
         ax.axison = False
 
         EV_2_plot = getattr(self, '_all_EV' + '_final')
@@ -2206,98 +1866,134 @@ class BeachBall:
         if self._plot_clr_order > 0:
             if self._plot_fill_flag:
 
-                ax.fill( self._outer_circle[0, :], self._outer_circle[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
-                ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                alpha = self._plot_fill_alpha * self._plot_total_alpha
+                ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                        fc=pressure_colour, alpha=alpha)
+                ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                        fc=tension_colour, alpha=alpha)
+                ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                        fc=tension_colour, alpha=alpha)
 
                 if self._plot_curve_in_curve != 0:
-                    ax.fill(self._outer_circle[0, :], self._outer_circle[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
+                    ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                            fc=tension_colour, alpha=alpha)
                     if self._plot_curve_in_curve < 1:
-                        ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-
+                        ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                                fc=pressure_colour, alpha=alpha)
+                        ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                                fc=tension_colour, alpha=alpha)
                     else:
-                        ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                                fc=pressure_colour, alpha=alpha)
+                        ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                                fc=tension_colour, alpha=alpha)
 
             if self._plot_show_princ_axes:
-
-                ax.plot(
-                    [EV_2_plot[0, 0]], [EV_2_plot[1, 0]], 'm^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 3]], [EV_2_plot[1, 3]], 'mv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 1]], [EV_2_plot[1, 1]], 'b^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 4]], [EV_2_plot[1, 4]], 'bv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 2]], [EV_2_plot[1, 2]], 'g^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 5]], [EV_2_plot[1, 5]], 'gv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-
+                alpha = self._plot_princ_axes_alpha * self._plot_total_alpha
+                ax.plot([EV_2_plot[0, 0]], [EV_2_plot[1, 0]], 'm^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 3]], [EV_2_plot[1, 3]], 'mv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 1]], [EV_2_plot[1, 1]], 'b^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 4]], [EV_2_plot[1, 4]], 'bv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 2]], [EV_2_plot[1, 2]], 'g^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 5]], [EV_2_plot[1, 5]], 'gv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
         else:
             if self._plot_fill_flag:
-                ax.fill( self._outer_circle[0, :], self._outer_circle[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
-                ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                alpha = self._plot_fill_alpha * self._plot_total_alpha
+                ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                        fc=tension_colour, alpha=alpha)
+                ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                        fc=pressure_colour, alpha=alpha)
+                ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                        fc=pressure_colour, alpha=alpha)
 
                 if self._plot_curve_in_curve != 0:
-                    ax.fill(self._outer_circle[0, :], self._outer_circle[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
+                    ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                            fc=pressure_colour, alpha=alpha)
                     if self._plot_curve_in_curve < 0:
-                        ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                                fc=tension_colour, alpha=alpha)
+                        ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                                fc=pressure_colour, alpha=alpha)
                         pass
                     else:
-                        ax.fill( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :],
+                                fc=tension_colour, alpha=alpha)
+                        ax.fill(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :],
+                                fc=pressure_colour, alpha=alpha)
                         pass
 
             if self._plot_show_princ_axes:
-
-                ax.plot(
-                    [EV_2_plot[0, 0]], [EV_2_plot[1, 0]], 'g^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 3]], [EV_2_plot[1, 3]], 'gv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 1]], [EV_2_plot[1, 1]], 'b^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 4]], [EV_2_plot[1, 4]], 'bv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 2]], [EV_2_plot[1, 2]], 'm^', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-                ax.plot(
-                    [EV_2_plot[0, 5]], [EV_2_plot[1, 5]], 'mv', ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
+                alpha = self._plot_princ_axes_alpha * self._plot_total_alpha
+                ax.plot([EV_2_plot[0, 0]], [EV_2_plot[1, 0]], 'g^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 3]], [EV_2_plot[1, 3]], 'gv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 1]], [EV_2_plot[1, 1]], 'b^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 4]], [EV_2_plot[1, 4]], 'bv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 2]], [EV_2_plot[1, 2]], 'm^',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
+                ax.plot([EV_2_plot[0, 5]], [EV_2_plot[1, 5]], 'mv',
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
 
         self._plot_nodalline_colour = 'y'
 
-        ax.plot( curve_neg_2_plot[0, :], curve_neg_2_plot[1,:], 'o', c=self._plot_nodalline_colour, lw=self._plot_nodalline_width, alpha=self._plot_nodalline_alpha*self._plot_total_alpha, ms=3 )
+        ax.plot(curve_neg_2_plot[0, :], curve_neg_2_plot[1, :], 'o',
+                c=self._plot_nodalline_colour, lw=self._plot_nodalline_width,
+                alpha=self._plot_nodalline_alpha * self._plot_total_alpha,
+                ms=3)
 
         self._plot_nodalline_colour = 'b'
 
-        ax.plot( curve_pos_2_plot[0, :], curve_pos_2_plot[1,:], 'D', c=self._plot_nodalline_colour, lw=self._plot_nodalline_width, alpha=self._plot_nodalline_alpha*self._plot_total_alpha, ms=3)
+        ax.plot(curve_pos_2_plot[0, :], curve_pos_2_plot[1, :], 'D',
+                c=self._plot_nodalline_colour, lw=self._plot_nodalline_width,
+                alpha=self._plot_nodalline_alpha * self._plot_total_alpha,
+                ms=3)
 
         if self._plot_show_1faultplane:
             if self._plot_show_FP_index == 1:
-                ax.plot( FP1_2_plot[0, :], FP1_2_plot[1,:], '+', c=self._plot_faultplane_colour, lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha, ms=5)
-
+                ax.plot(FP1_2_plot[0, :], FP1_2_plot[1, :], '+',
+                        c=self._plot_faultplane_colour,
+                        lw=self._plot_faultplane_width,
+                        alpha=self._plot_faultplane_alpha *
+                        self._plot_total_alpha, ms=5)
             elif self._plot_show_FP_index == 2:
-                ax.plot( FP2_2_plot[0, :], FP2_2_plot[1,:], '+', c=self._plot_faultplane_colour, lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha, ms=5)
+                ax.plot(FP2_2_plot[0, :], FP2_2_plot[1, :], '+',
+                        c=self._plot_faultplane_colour,
+                        lw=self._plot_faultplane_width,
+                        alpha=self._plot_faultplane_alpha *
+                        self._plot_total_alpha, ms=5)
 
         elif self._plot_show_faultplanes:
-            ax.plot( FP1_2_plot[0, :], FP1_2_plot[1,:], '+', c=self._plot_faultplane_colour, lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha, ms=4)
-            ax.plot( FP2_2_plot[0, :], FP2_2_plot[1,:], '+', c=self._plot_faultplane_colour, lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha, ms=4)
-
+            ax.plot(FP1_2_plot[0, :], FP1_2_plot[1, :], '+',
+                    c=self._plot_faultplane_colour,
+                    lw=self._plot_faultplane_width,
+                    alpha=self._plot_faultplane_alpha * self._plot_total_alpha,
+                    ms=4)
+            ax.plot(FP2_2_plot[0, :], FP2_2_plot[1, :], '+',
+                    c=self._plot_faultplane_colour,
+                    lw=self._plot_faultplane_width,
+                    alpha=self._plot_faultplane_alpha * self._plot_total_alpha,
+                    ms=4)
         else:
             pass
 
@@ -2306,13 +2002,14 @@ class BeachBall:
         if self._pure_isotropic:
             if abs(np.trace(self._M)) > epsilon:
                 if self._plot_clr_order < 0:
-                    ax.fill(self._outer_circle[0, :], self._outer_circle[1,:], fc=tension_colour, alpha= 1, zorder=100 )
+                    ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                            fc=tension_colour, alpha=1, zorder=100)
                 else:
-                    ax.fill( self._outer_circle[0, :], self._outer_circle[1,:], fc=pressure_colour, alpha= 1, zorder=100 )
+                    ax.fill(self._outer_circle[0, :], self._outer_circle[1, :],
+                            fc=pressure_colour, alpha=1, zorder=100)
 
         # plot NED basis vectors
         if self._plot_show_basis_axes:
-
             plot_size_in_points = self._plot_size * 2.54 * 72
             points_per_unit = plot_size_in_points / 2.
 
@@ -2325,34 +2022,40 @@ class BeachBall:
                 y_coord = val[1]
                 np_letter = direction_letters[idx]
 
-                rot_angle = - np.arctan2(y_coord, x_coord) + pi / 2.
+                rot_angle = -np.arctan2(y_coord, x_coord) + pi / 2.
                 original_rho = np.sqrt(x_coord ** 2 + y_coord ** 2)
 
-                marker_x = (
-                    original_rho - (3 * symsize / points_per_unit)) * np.sin(rot_angle)
-                marker_y = (
-                    original_rho - (3 * symsize / points_per_unit)) * np.cos(rot_angle)
-                annot_x = (
-                    original_rho - (8.5 * fontsize / points_per_unit)) * np.sin(rot_angle)
-                annot_y = (
-                    original_rho - (8.5 * fontsize / points_per_unit)) * np.cos(rot_angle)
+                marker_x = (original_rho - (3 * symsize / points_per_unit)) * \
+                    np.sin(rot_angle)
+                marker_y = (original_rho - (3 * symsize / points_per_unit)) * \
+                    np.cos(rot_angle)
+                annot_x = (original_rho - (8.5 * fontsize / points_per_unit)) \
+                    * np.sin(rot_angle)
+                annot_y = (original_rho - (8.5 * fontsize / points_per_unit)) \
+                    * np.cos(rot_angle)
 
-                ax.text(
-                    annot_x, annot_y, np_letter, horizontalalignment='center', size=fontsize, weight='bold', verticalalignment='center',
-                    bbox=dict(edgecolor='white', facecolor='white', alpha=1))
+                ax.text(annot_x, annot_y, np_letter,
+                        horizontalalignment='center', size=fontsize,
+                        weight='bold', verticalalignment='center',
+                        bbox=dict(edgecolor='white', facecolor='white',
+                                  alpha=1))
 
                 if original_rho > epsilon:
-                    ax.scatter([marker_x], [marker_y], marker=(
-                        3, 0, rot_angle), s=symsize ** 2, c='k', facecolor='k', zorder=300)
+                    ax.scatter([marker_x], [marker_y],
+                               marker=(3, 0, rot_angle), s=symsize ** 2, c='k',
+                               facecolor='k', zorder=300)
                 else:
-                    ax.scatter([x_coord], [y_coord], marker=(
-                        4, 1, rot_angle), s=symsize ** 2, c='k', facecolor='k', zorder=300)
-
-
+                    ax.scatter([x_coord], [y_coord], marker=(4, 1, rot_angle),
+                               s=symsize ** 2, c='k', facecolor='k',
+                               zorder=300)
 
         # plot both circle lines (radius 1 and 2)
-        ax.plot(self._unit_sphere[0, :], self._unit_sphere[1,:], c=self._plot_outerline_colour, lw=self._plot_outerline_width, alpha= self._plot_outerline_alpha*self._plot_total_alpha)# ,ls=':')
-        ax.plot(self._outer_circle[0, :], self._outer_circle[1,:], c=self._plot_outerline_colour, lw=self._plot_outerline_width, alpha= self._plot_outerline_alpha*self._plot_total_alpha)# ,ls=':')
+        ax.plot(self._unit_sphere[0, :], self._unit_sphere[1, :],
+                c=self._plot_outerline_colour, lw=self._plot_outerline_width,
+                alpha=self._plot_outerline_alpha * self._plot_total_alpha)
+        ax.plot(self._outer_circle[0, :], self._outer_circle[1, :],
+                c=self._plot_outerline_colour, lw=self._plot_outerline_width,
+                alpha=self._plot_outerline_alpha * self._plot_total_alpha)
 
         # dummy points for setting plot plot size more accurately
         ax.plot([0, 2.1, 0, -2.1], [2.1, 0, -2.1, 0], ',', alpha=0.)
@@ -2362,40 +2065,19 @@ class BeachBall:
 
         if self._plot_save_plot:
             try:
-
-                plotfig.savefig(
-                    self._plot_outfile + '.' + self._plot_outfile_format, dpi=self._plot_dpi, transparent=True,
-                    format=self._plot_outfile_format)
-
+                plotfig.savefig(self._plot_outfile + '.' +
+                                self._plot_outfile_format, dpi=self._plot_dpi,
+                                transparent=True,
+                                format=self._plot_outfile_format)
             except:
                 print 'saving of plot not possible'
 
         P.show()
 
-        del P
-        del matplotlib
-
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-
-    def pa_plot(self, kwargs={}):
+    def pa_plot(self, kwargs):
         """
-        Method for plotting the BB in the principal axes system.
-
-        Module matplotlib (pylab) must be installed !!!
-
-
-        Input:
-        keyword dictionary
-
-
-        required keyword arguments:
-        none
-
-
+        Plot of the solution in the principal axes system.
         """
-        import matplotlib
-        from matplotlib import interactive
         import pylab as P
 
         self._update_attributes(kwargs)
@@ -2418,7 +2100,7 @@ class BeachBall:
         for i in (np.arange(4) + 1) * 0.2:
             r_steps.append(i)
         r_labels = ['S']
-        for ii in np.arange(len(r_steps)):
+        for ii in xrange(len(r_steps)):
             if (ii + 1) % 2 == 0:
                 r_labels.append(str(r_steps[ii]))
             else:
@@ -2440,30 +2122,18 @@ class BeachBall:
 
         if self._plot_save_plot:
             try:
-                plotfig.savefig(
-                    self._plot_outfile + '.' + self._plot_outfile_format, dpi=self._plot_dpi, transparent=True,
-                    format=self._plot_outfile_format)
-
+                fig.savefig(self._plot_outfile + '.' +
+                            self._plot_outfile_format, dpi=self._plot_dpi,
+                            transparent=True,
+                            format=self._plot_outfile_format)
             except:
                 print 'saving of plot not possible'
-
         P.show()
-
-        del P
-        del matplotlib
-
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
-    #-------------------------------------------------------------------
 
     def _set_standard_attributes(self):
         """
         Sets default values of mandatory arguments.
-
         """
-
-        # PLOT
-        #
         # plot basis system and view point:
         self._plot_basis = 'NED'
         self._plot_projection = 'stereo'
@@ -2531,9 +2201,7 @@ class BeachBall:
         # if, howto, whereto save the plot
         self._plot_save_plot = False
         self._plot_outfile = './BB_plot_example'
-        self._plot_outfile_format = 'png'
-
-    #---------------------------------------------------------------
+        self._plot_outfile_format = 'svg'
 
     def _update_attributes(self, kwargs):
         """
@@ -2552,39 +2220,38 @@ class BeachBall:
             if '_' + kw in dir(self):
                 setattr(self, '_' + kw, kwargs[key])
 
-    #---------------------------------------------------------------
+        if kwargs.get('plot_only_lines', False):
+            setattr(self, '_plot_fill_flag', False)
 
-    def _setup_BB(self):
+    def _setup_BB(self, unit_circle=True):
         """
         Setup of the beachball, when a plotting method is evoked.
 
+        Contains all the technical stuff for generating the final view of the
+        beachball:
 
-        Contains all the technical stuff for generating the final view of the beachball:
-
-        - Finding a rotation matrix, describing the given viewpoint onto the beachball projection
+        - Finding a rotation matrix, describing the given viewpoint onto the
+          beachball projection
         - Rotating all elements (lines, points) w.r.t. the given viewpoint
         - Projecting the 3D sphere into the 2D plane
         - Building circle lines in radius r=1 and r=2
-        - Correct the order of line points, yielding a consecutive set of points for drawing lines
+        - Correct the order of line points, yielding a consecutive set of
+          points for drawing lines
         - Smoothing of all curves, avoiding nasty sectioning connection lines
-        - Checking, if the two nodalline curves are laying completely within each other ( cahnges plotting order of overlay plot construction)
+        - Checking, if the two nodalline curves are laying completely within
+          each other ( cahnges plotting order of overlay plot construction)
         - Projection of final smooth solution onto the standard unit sphere
         """
-
         self._find_basis_change_2_new_viewpoint()
-
         self._rotate_all_objects_2_new_view()
-
         self._vertical_2D_projection()
 
-        self._build_circles()
+        if unit_circle:
+            self._build_circles()
 
         if not self.MT._iso_percentage == 100:
-
             self._correct_curves()
-
             self._smooth_curves()
-
             self._check_curve_in_curve()
 
         self._projection_2_unit_sphere()
@@ -2595,19 +2262,15 @@ class BeachBall:
             else:
                 self._plot_clr_order = -1
 
-    #---------------------------------------------------------------
     def _correct_curves(self):
         """
         Correcting potentially wrong curves.
 
-        Checks, if the order of the given coordinates of the lines must be re-arranged, allowing for an automatical line plotting.
-
+        Checks, if the order of the given coordinates of the lines must be
+        re-arranged, allowing for an automatical line plotting.
         """
-
-        list_of_curves_2_correct = [
-            'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
-        projection = self._plot_projection
-
+        list_of_curves_2_correct = ['nodalline_negative', 'nodalline_positive',
+                                    'FP1', 'FP2']
         n_curve_points = self._plot_n_points
 
         for obj in list_of_curves_2_correct:
@@ -2616,23 +2279,28 @@ class BeachBall:
 
             obj2cor_in_right_order = self._sort_curve_points(obj2cor)
 
+            # logger.debug( 'curve: ', str(obj))
             # check, if curve closed !!!!!!
-            start_r = np.sqrt(
-                obj2cor_in_right_order[0, 0] ** 2 + obj2cor_in_right_order[1, 0] ** 2)
-            r_last_point = np.sqrt(
-                obj2cor_in_right_order[0, -1] ** 2 + obj2cor_in_right_order[1, -1] ** 2)
-            dist_last_first_point = np.sqrt((obj2cor_in_right_order[0, -1] - obj2cor_in_right_order[
-                                            0, 0]) ** 2 + (obj2cor_in_right_order[1, -1] - obj2cor_in_right_order[1, 0]) ** 2)
+            start_r = np.sqrt(obj2cor_in_right_order[0, 0] ** 2 +
+                              obj2cor_in_right_order[1, 0] ** 2)
+            r_last_point = np.sqrt(obj2cor_in_right_order[0, -1] ** 2 +
+                                   obj2cor_in_right_order[1, -1] ** 2)
+            dist_last_first_point = \
+                np.sqrt((obj2cor_in_right_order[0, -1] -
+                        obj2cor_in_right_order[0, 0]) ** 2 +
+                       (obj2cor_in_right_order[1, -1] -
+                        obj2cor_in_right_order[1, 0]) ** 2)
 
             # check, if distance between last and first point is smaller than
             # the distance between last point and the edge (at radius=2)
             if dist_last_first_point > (2 - r_last_point):
                 # add points on edge to polygon, if it is an open curve
-                phi_end = np.arctan2(obj2cor_in_right_order[
-                    0, -1], obj2cor_in_right_order[1, -1]) % (2 * pi)
+                # logger.debug( str(obj)+' not closed - closing over edge... ')
+                phi_end = np.arctan2(obj2cor_in_right_order[0, -1],
+                                     obj2cor_in_right_order[1, -1]) % (2 * pi)
                 R_end = r_last_point
-                phi_start = np.arctan2(obj2cor_in_right_order[
-                                       0, 0], obj2cor_in_right_order[1, 0]) % (2 * pi)
+                phi_start = np.arctan2(obj2cor_in_right_order[0, 0],
+                                       obj2cor_in_right_order[1, 0]) % (2 * pi)
                 R_start = start_r
 
                 # add one point on the edge every fraction of degree given by
@@ -2649,57 +2317,60 @@ class BeachBall:
 
                 radius_interval = R_start - R_end  # closing from end to start
 
-                n_edgepoints = int(
-                    openangle * rad2deg * n_curve_points / 360.) - 1
-
+                n_edgepoints = int(openangle * rad2deg *
+                                   n_curve_points / 360.) - 1
+                # logger.debug( 'open angle %.2f degrees - filling with %i
+                # points on the edge\n'%(openangle/pi*180,n_edgepoints))
                 if go_ccw:
-                    obj2cor_in_right_order = list(
-                        obj2cor_in_right_order.transpose())
-                    for kk in np.arange(n_edgepoints) + 1:
-                        current_phi    = phi_end - \
-                            kk * openangle / (n_edgepoints + 1)
-                        current_radius = R_end + kk * \
-                            radius_interval / (n_edgepoints + 1)
-                        obj2cor_in_right_order.append(
-                            [current_radius * np.sin(current_phi), current_radius * np.cos(current_phi)])
-                    obj2cor_in_right_order = np.array(
-                        obj2cor_in_right_order).transpose()
+                    obj2cor_in_right_order = \
+                        list(obj2cor_in_right_order.transpose())
+                    for kk in xrange(n_edgepoints + 1):
+                        current_phi = phi_end - kk * openangle / \
+                            (n_edgepoints + 1)
+                        current_radius = R_end + kk * radius_interval / \
+                            (n_edgepoints + 1)
+                        temp = [current_radius * math.sin(current_phi),
+                                current_radius * np.cos(current_phi)]
+                        obj2cor_in_right_order.append(temp)
+                    obj2cor_in_right_order = \
+                        np.array(obj2cor_in_right_order).transpose()
                 else:
-                    obj2cor_in_right_order = list(
-                        obj2cor_in_right_order.transpose())
-                    for kk in np.arange(n_edgepoints) + 1:
-                        current_phi = phi_end + kk * \
-                            openangle / (n_edgepoints + 1)
-                        current_radius = R_end + kk * \
-                            radius_interval / (n_edgepoints + 1)
-                        obj2cor_in_right_order.append(
-                            [current_radius * np.sin(current_phi), current_radius * np.cos(current_phi)])
-                    obj2cor_in_right_order = np.array(
-                        obj2cor_in_right_order).transpose()
-
+                    obj2cor_in_right_order = \
+                        list(obj2cor_in_right_order.transpose())
+                    for kk in xrange(n_edgepoints + 1):
+                        current_phi = phi_end + kk * openangle / \
+                            (n_edgepoints + 1)
+                        current_radius = R_end + kk * radius_interval / \
+                            (n_edgepoints + 1)
+                        temp = [current_radius * math.sin(current_phi),
+                                current_radius * np.cos(current_phi)]
+                        obj2cor_in_right_order.append(temp)
+                    obj2cor_in_right_order = \
+                        np.array(obj2cor_in_right_order).transpose()
             setattr(self, '_' + obj + '_in_order', obj2cor_in_right_order)
-
         return 1
 
-    #---------------------------------------------------------------
     def _nodallines_in_NED_system(self):
         """
-        The two nodal lines between the areas on a beachball are given by the points, where
-        tan**2(alpha) = (-EWs/(EWN*cos(phi)**2 + EWh*sin(phi)**2))
+        The two nodal lines between the areas on a beachball are given by the
+        points, where tan²(alpha) = (-EWs/(EWN*cos(phi)**2 + EWh*sin(phi)**2))
         is fulfilled.
 
-        This solution is gained in the principal axes system and then expressed in terms of the NED basis system
+        This solution is gained in the principal axes system and then expressed
+        in terms of the NED basis system
 
         output:
-        - set of points, building the first nodal line,  coordinates in the input basis system (standard NED)
-        - set of points, building the second nodal line,  coordinates in the input basis system (standard NED)
-        - array with 6 points, describing positive and negative part of 3 principal axes
-        - array with partition of full circle (angle values in degrees) fraction is given by parametre n_curve_points
+        - set of points, building the first nodal line,  coordinates in the
+          input basis system (standard NED)
+        - set of points, building the second nodal line,  coordinates in the
+          input basis system (standard NED)
+        - array with 6 points, describing positive and negative part of 3
+          principal axes
+        - array with partition of full circle (angle values in degrees)
+          fraction is given by parametre n_curve_points
         """
-
         # build the nodallines of positive/negative areas in the principal axes
         # system
-
         n_curve_points = self._plot_n_points
 
         # phi is the angle between neutral axis and horizontal projection
@@ -2707,18 +2378,17 @@ class BeachBall:
         # N-axis. Running mathematically negative (clockwise) around the
         # SIGMA-axis. Stepsize is given by the parametre for number of
         # curve points
-        phi = (np.arange(n_curve_points) / float(
-            n_curve_points) + 1. / n_curve_points) * 2 * pi
+        phi = (np.arange(n_curve_points) / float(n_curve_points) +
+               1. / n_curve_points) * 2 * pi
         self._phi_curve = phi
 
-        # analytical/geometrical solution for separatrix curve - alpha is opening angle
-        # between principal axis SIGMA and point of curve. (alpha is 0, if
-        # curve lies directly on the SIGMA axis)
+        # analytical/geometrical solution for separatrix curve - alpha is
+        # opening angle between principal axis SIGMA and point of curve. (alpha
+        # is 0, if curve lies directly on the SIGMA axis)
 
         # CASE: including isotropic part
         # sigma axis flippes, if EWn flippes sign
 
-        #----------------------------------------------------------------------
         EWh_devi = self.MT.get_eigvals()[0] - 1. / 3 * np.trace(self._M)
         EWn_devi = self.MT.get_eigvals()[1] - 1. / 3 * np.trace(self._M)
         EWs_devi = self.MT.get_eigvals()[2] - 1. / 3 * np.trace(self._M)
@@ -2727,22 +2397,24 @@ class BeachBall:
             EWh = EWh_devi
             EWn = EWn_devi
             EWs = EWs_devi
-
         else:
-
-            EWh_tmp = self.MT.get_eigvals()[0]  # - 1./3 * np.trace(self._M)
-            EWn_tmp = self.MT.get_eigvals()[1]  # - 1./3 * np.trace(self._M)
-            EWs_tmp = self.MT.get_eigvals()[2]  # - 1./3 * np.trace(self._M)
+            EWh_tmp = self.MT.get_eigvals()[0]
+            EWn_tmp = self.MT.get_eigvals()[1]
+            EWs_tmp = self.MT.get_eigvals()[2]
 
             trace_m = np.sum(self.MT.get_eigvals())
             EWh = EWh_tmp.copy()
             EWs = EWs_tmp.copy()
 
             if trace_m != 0:
-                if (self._plot_clr_order > 0 and EWn_tmp >= 0 and abs(EWs_tmp) > abs(EWh_tmp)) or (self._plot_clr_order < 0 and EWn_tmp <= 0 and abs(EWs_tmp) > abs(EWh_tmp)):
+                if (self._plot_clr_order > 0 and EWn_tmp >= 0 and
+                        abs(EWs_tmp) > abs(EWh_tmp)) or \
+                        (self._plot_clr_order < 0 and
+                         EWn_tmp <= 0 and abs(EWs_tmp) > abs(EWh_tmp)):
+
                     EWs = EWh_tmp.copy()
                     EWh = EWs_tmp.copy()
-                    # print 'changed order!!\n'
+                    print 'changed order!!\n'
                     EVs_tmp = self.MT._rotation_matrix[:, 2].copy()
                     EVh_tmp = self.MT._rotation_matrix[:, 0].copy()
 
@@ -2790,19 +2462,17 @@ class BeachBall:
         S_values_positive_FP = np.cos(alpha_FP / rad2deg)
         S_values_negative_FP = -np.cos(alpha_FP / rad2deg)
 
-        #
         # change basis back to original input reference system
-        #
         chng_basis = self.MT._rotation_matrix
 
         line_tuple_pos = np.zeros((3, n_curve_points))
         line_tuple_neg = np.zeros((3, n_curve_points))
 
-        for ii in np.arange(n_curve_points):
-            pos_vec_in_EV_basis = np.array(
-                [H_values[ii], N_values[ii], S_values_positive[ii]]).transpose()
-            neg_vec_in_EV_basis = np.array(
-                [H_values[ii], N_values[ii], S_values_negative[ii]]).transpose()
+        for ii in xrange(n_curve_points):
+            pos_vec_in_EV_basis = np.array([H_values[ii], N_values[ii],
+                                           S_values_positive[ii]]).transpose()
+            neg_vec_in_EV_basis = np.array([H_values[ii], N_values[ii],
+                                           S_values_negative[ii]]).transpose()
             line_tuple_pos[:, ii] = np.dot(chng_basis, pos_vec_in_EV_basis)
             line_tuple_neg[:, ii] = np.dot(chng_basis, neg_vec_in_EV_basis)
 
@@ -2812,18 +2482,12 @@ class BeachBall:
 
         all_EV = np.zeros((3, 6))
 
-        EVh_orig = np.dot(chng_basis, EVs)
-        all_EV[:, 0] = EVh.transpose()  # _orig.transpose()
-        EVn_orig = np.dot(chng_basis, EVn)
-        all_EV[:, 1] = EVn.transpose()  # _orig.transpose()
-        EVs_orig = np.dot(chng_basis, EVh)
-        all_EV[:, 2] = EVs.transpose()  # _orig.transpose()
-        EVh_orig_neg = np.dot(chng_basis, EVs)
-        all_EV[:, 3] = -EVh.transpose()  # _orig_neg.transpose()
-        EVn_orig_neg = np.dot(chng_basis, EVn)
-        all_EV[:, 4] = -EVn.transpose()  # _orig_neg.transpose()
-        EVs_orig_neg = np.dot(chng_basis, EVh)
-        all_EV[:, 5] = -EVs.transpose()  # _orig_neg.transpose()
+        all_EV[:, 0] = EVh.transpose()
+        all_EV[:, 1] = EVn.transpose()
+        all_EV[:, 2] = EVs.transpose()
+        all_EV[:, 3] = -EVh.transpose()
+        all_EV[:, 4] = -EVn.transpose()
+        all_EV[:, 5] = -EVs.transpose()
 
         # basis vectors:
         all_BV = np.zeros((3, 6))
@@ -2834,29 +2498,30 @@ class BeachBall:
         all_BV[:, 4] = np.array((0, 0, 1))
         all_BV[:, 5] = np.array((0, 0, -1))
 
-        # re-sort the two 90 degree nodal lines to 2 fault planes -> cut each at
+        # re-sort the two 90 degree nodal lines to 2 fault planes - cut each at
         # halves and merge pairs
         # additionally change basis system to NED reference system
+
         midpoint_idx = int(n_curve_points / 2.)
 
         FP1 = np.zeros((3, n_curve_points))
         FP2 = np.zeros((3, n_curve_points))
 
-        for ii in np.arange(midpoint_idx):
-            FP1_vec = np.array(
-                [H_values_FP[ii], N_values_FP[ii], S_values_positive_FP[ii]]).transpose()
-            FP2_vec = np.array(
-                [H_values_FP[ii], N_values_FP[ii], S_values_negative_FP[ii]]).transpose()
+        for ii in xrange(midpoint_idx):
+            FP1_vec = np.array([H_values_FP[ii], N_values_FP[ii],
+                               S_values_positive_FP[ii]]).transpose()
+            FP2_vec = np.array([H_values_FP[ii], N_values_FP[ii],
+                               S_values_negative_FP[ii]]).transpose()
             FP1[:, ii] = np.dot(chng_basis, FP1_vec)
             FP2[:, ii] = np.dot(chng_basis, FP2_vec)
 
-        for jj in np.arange(midpoint_idx):
+        for jj in xrange(midpoint_idx):
             ii = n_curve_points - jj - 1
 
-            FP1_vec = np.array(
-                [H_values_FP[ii], N_values_FP[ii], S_values_negative_FP[ii]]).transpose()
-            FP2_vec = np.array(
-                [H_values_FP[ii], N_values_FP[ii], S_values_positive_FP[ii]]).transpose()
+            FP1_vec = np.array([H_values_FP[ii], N_values_FP[ii],
+                               S_values_negative_FP[ii]]).transpose()
+            FP2_vec = np.array([H_values_FP[ii], N_values_FP[ii],
+                               S_values_positive_FP[ii]]).transpose()
             FP1[:, ii] = np.dot(chng_basis, FP1_vec)
             FP2[:, ii] = np.dot(chng_basis, FP2_vec)
 
@@ -2869,19 +2534,15 @@ class BeachBall:
         self._nodalline_negative = line_tuple_neg
         self._nodalline_positive = line_tuple_pos
 
-    #---------------------------------------------------------------
     def _identify_faultplanes(self):
         """
         See, if the 2 faultplanes, given as attribute of the moment
         tensor object, handed to this instance, are consistent with
         the faultplane lines, obtained from the basis solution. If
         not, interchange the indices of the newly found ones.
-
         """
         # TODO !!!!!!
-
         pass
-    #---------------------------------------------------------------
 
     def _find_basis_change_2_new_viewpoint(self):
         """
@@ -2890,7 +2551,6 @@ class BeachBall:
         Your original view point is the position (0,0,0). Input are the
         coordinates of the new point of view, equivalent to geographical
         coordinates.
-
 
         Example:
 
@@ -2903,11 +2563,10 @@ class BeachBall:
         The rotation matrixx is the matrix for the change of basis to the
         new local orthonormal system.
 
-
         input:
-        -- latitude in degrees from -90 (south) to 90 (north)
-        -- longitude in degrees from -180 (west) to 180 (east)
-        -- azimuth in degrees from 0 (heading north) to 360 (north again)
+        - latitude in degrees from -90 (south) to 90 (north)
+        - longitude in degrees from -180 (west) to 180 (east)
+        - azimuth in degrees from 0 (heading north) to 360 (north again)
         """
 
         new_latitude = self._plot_viewpoint[0]
@@ -2930,24 +2589,28 @@ class BeachBall:
         # assume input basis as NED!!!
 
         # original point of view therein is (0,0,-1)
-        # new point at lat=latitude, lon=longitude, az=0, given in old NED-coordinates:
-        # (cos(latitude), sin(latitude)*sin(longitude), sin(latitude)*cos(longitude) )
+        # new point at lat=latitude, lon=longitude, az=0, given in old
+        # NED-coordinates:
+        # (cos(latitude), sin(latitude)*sin(longitude),
+        # sin(latitude)*cos(longitude) )
         #
-        # new " down' " is given by the negative position vector, so pointing inwards to the centre point
-        #down_prime = - ( np.array( ( s_lat, c_lat*c_lon, -c_lat*s_lon ) ) )
-        down_prime = - (np.array((s_lat, c_lat * s_lon, -c_lat * c_lon)))
+        # new " down' " is given by the negative position vector, so pointing
+        # inwards to the centre point
+        # down_prime = - ( np.array( ( s_lat, c_lat*c_lon, -c_lat*s_lon ) ) )
+        down_prime = -(np.array((s_lat, c_lat * s_lon, -c_lat * c_lon)))
 
-        # normalise:
+        #normalise:
         down_prime /= np.sqrt(np.dot(down_prime, down_prime))
 
-        # print down_prime
         # get second local basis vector " north' " by orthogonalising
         # (Gram-Schmidt method) the original north w.r.t. the new " down' "
-        north_prime_not_normalised = np.array((1., 0., 0.)) - (np.dot(
-            down_prime,  np.array((1., 0., 0.))) / (np.dot(down_prime, down_prime)) * down_prime)
+        north_prime_not_normalised = np.array((1., 0., 0.)) - \
+            (np.dot(down_prime, np.array((1., 0., 0.))) /
+             (np.dot(down_prime, down_prime)) * down_prime)
 
-        len_north_prime_not_normalised = np.sqrt(
-            np.dot(north_prime_not_normalised, north_prime_not_normalised))
+        len_north_prime_not_normalised = \
+            np.sqrt(np.dot(north_prime_not_normalised,
+                           north_prime_not_normalised))
         # check for poles:
         if np.abs(len_north_prime_not_normalised) < epsilon:
             # case: north pole
@@ -2957,8 +2620,8 @@ class BeachBall:
             else:
                 north_prime = np.array((0., 0., -1.))
         else:
-            north_prime                    = north_prime_not_normalised / \
-                len_north_prime_not_normalised
+            north_prime = \
+                north_prime_not_normalised / len_north_prime_not_normalised
 
         # third basis vector is obtained by a cross product of the first two
         east_prime = np.cross(down_prime, north_prime)
@@ -2971,17 +2634,16 @@ class BeachBall:
         rotmat_pos_raw[:, 1] = east_prime
         rotmat_pos_raw[:, 2] = down_prime
 
-        rotmat_pos = np.matrix(rotmat_pos_raw).T
+        rotmat_pos = np.asmatrix(rotmat_pos_raw).T
         # this matrix gives the coordinates of a given point in the old
         # coordinates w.r.t. the new system
 
         # up to here, only the position has changed, the angle of view
-        #(azimuth) has to be added by an additional rotation around the
+        # (azimuth) has to be added by an additional rotation around the
         # down'-axis (in the frame of the new coordinates)
-
         # set up the local rotation around the new down'-axis by the given
-        # angle 'azimuth'. Positive values turn view counterclockwise from the new
-        # north'
+        # angle 'azimuth'. Positive values turn view counterclockwise from the
+        # new north'
         only_rotation = np.zeros((3, 3))
         s_az = np.sin(new_azimuth / rad2deg)
         if abs(s_az) < epsilon:
@@ -2996,7 +2658,7 @@ class BeachBall:
         only_rotation[0, 1] = -s_az
         only_rotation[1, 0] = s_az
 
-        local_rotation = np.matrix(only_rotation)
+        local_rotation = np.asmatrix(only_rotation)
 
         # apply rotation from left!!
         total_rotation_matrix = np.dot(local_rotation, rotmat_pos)
@@ -3005,71 +2667,59 @@ class BeachBall:
         # the new (rotated) frame:
         self._plot_basis_change = total_rotation_matrix
 
-    #---------------------------------------------------------------
     def _rotate_all_objects_2_new_view(self):
         """
         Rotate all relevant parts of the solution - namely the
         eigenvector-projections, the 2 nodallines, and the faultplanes
         - so that they are seen from the new viewpoint.
-
         """
-        objects_2_rotate = [
-            'all_EV', 'all_BV', 'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        objects_2_rotate = ['all_EV', 'all_BV', 'nodalline_negative',
+                            'nodalline_positive', 'FP1', 'FP2']
 
         for obj in objects_2_rotate:
-
             object2rotate = getattr(self, '_' + obj).transpose()
 
-            #logger.debug( str(np.shape(object2rotate)),str(len(object2rotate)) )
-            #logger.debug( str(np.shape(self._plot_basis_change)) )
-
             rotated_thing = object2rotate.copy()
-            for i in np.arange(len(object2rotate)):
-                rotated_thing[i] = np.dot(
-                    self._plot_basis_change, object2rotate[i])
+            for i in xrange(len(object2rotate)):
+                rotated_thing[i] = np.dot(self._plot_basis_change,
+                                          object2rotate[i])
 
             rotated_object = rotated_thing.copy()
             setattr(self, '_' + obj + '_rotated', rotated_object.transpose())
 
-    #---------------------------------------------------------------
-
     def _vertical_2D_projection(self):
         """
         Start the vertical projection of the 3D beachball onto the 2D plane.
-
         The projection is chosen according to the attribute '_plot_projection'
         """
-
         list_of_possible_projections = ['stereo', 'ortho', 'lambert', 'gnom']
 
         if not self._plot_projection in list_of_possible_projections:
-            print 'requested projection not possible - choose from:\n ', list_of_possible_projections
+            print 'desired projection not possible - choose from:\n ',
+            print list_of_possible_projections
             raise MTError(' !! ')
 
         if self._plot_projection == 'stereo':
             if not self._stereo_vertical():
                 print 'ERROR in stereo_vertical'
                 raise MTError(' !! ')
-
-        if self._plot_projection == 'ortho':
+        elif self._plot_projection == 'ortho':
             if not self._orthographic_vertical():
                 print 'ERROR in stereo_vertical'
                 raise MTError(' !! ')
-
-        if self._plot_projection == 'lambert':
+        elif self._plot_projection == 'lambert':
             if not self._lambert_vertical():
                 print 'ERROR in stereo_vertical'
                 raise MTError(' !! ')
-
-        if self._plot_projection == 'gnom':
+        elif self._plot_projection == 'gnom':
             if not self._gnomonic_vertical():
                 print 'ERROR in stereo_vertical'
                 raise MTError(' !! ')
 
-    #---------------------------------------------------------------
     def _stereo_vertical(self):
         """
-        Stereographic/azimuthal conformal 2D projection onto a plane, tangent to the lowest point (0,0,1).
+        Stereographic/azimuthal conformal 2D projection onto a plane, tangent
+        to the lowest point (0,0,1).
 
         Keeps the angles constant!
 
@@ -3078,14 +2728,14 @@ class BeachBall:
         and r=2. If the attribute '_show_upper_hemis' is set, the
         projection is reversed.
         """
-
-        objects_2_project = [
-            'all_EV', 'all_BV', 'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        objects_2_project = ['all_EV', 'all_BV', 'nodalline_negative',
+                             'nodalline_positive', 'FP1', 'FP2']
 
         available_coord_systems = ['NED']
 
         if not self._plot_basis in available_coord_systems:
-            print 'requested plotting projection not possible - choose from :\n', avail_coord_systems
+            print 'desired plotting projection not possible - choose from :\n',
+            print available_coord_systems
             raise MTError(' !! ')
 
         plot_upper_hem = self._plot_show_upper_hemis
@@ -3098,13 +2748,11 @@ class BeachBall:
             n_points = len(o2proj[0, :])
             stereo_coords = np.zeros((2, n_points))
 
-            for ll in np.arange(n_points):
+            for ll in xrange(n_points):
                 # second component is EAST
                 co_x = coords[1, ll]
-
                 # first component is NORTH
                 co_y = coords[0, ll]
-
                 # z given in DOWN
                 co_z = -coords[2, ll]
 
@@ -3127,7 +2775,6 @@ class BeachBall:
 
                         new_x = co_x / rho_hor * new_rho
                         new_y = co_y / rho_hor * new_rho
-
                     else:
                         new_rho = 2 - (rho_hor / (1. + co_z))
                         if plot_upper_hem:
@@ -3144,12 +2791,13 @@ class BeachBall:
 
         return 1
 
-    #---------------------------------------------------------------
     def _orthographic_vertical(self):
         """
-        Orthographic 2D projection onto a plane, tangent to the lowest point (0,0,1).
+        Orthographic 2D projection onto a plane, tangent to the lowest
+        point (0,0,1).
 
-        Shows the natural view on a 2D sphere from large distances (assuming parallel projection)
+        Shows the natural view on a 2D sphere from large distances (assuming
+        parallel projection)
 
         The parts in the lower hemisphere are projected to the unit
         sphere, the upper half to an annular region between radii r=1
@@ -3157,13 +2805,14 @@ class BeachBall:
         projection is reversed.
         """
 
-        objects_2_project = [
-            'all_EV', 'all_BV', 'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        objects_2_project = ['all_EV', 'all_BV', 'nodalline_negative',
+                             'nodalline_positive', 'FP1', 'FP2']
 
         available_coord_systems = ['NED']
 
         if not self._plot_basis in available_coord_systems:
-            print 'requested plotting projection not possible - choose from :\n', avail_coord_systems
+            print 'desired plotting projection not possible - choose from :\n',
+            print available_coord_systems
             raise MTError(' !! ')
 
         plot_upper_hem = self._plot_show_upper_hemis
@@ -3176,13 +2825,11 @@ class BeachBall:
             n_points = len(o2proj[0, :])
             coords2D = np.zeros((2, n_points))
 
-            for ll in np.arange(n_points):
+            for ll in xrange(n_points):
                 # second component is EAST
                 co_x = coords[1, ll]
-
                 # first component is NORTH
                 co_y = coords[0, ll]
-
                 # z given in DOWN
                 co_z = -coords[2, ll]
 
@@ -3197,7 +2844,6 @@ class BeachBall:
                     else:
                         if co_z > 0:
                             new_x = 2
-
                 else:
                     if co_z < 0:
                         new_rho = rho_hor
@@ -3206,7 +2852,6 @@ class BeachBall:
 
                         new_x = co_x / rho_hor * new_rho
                         new_y = co_y / rho_hor * new_rho
-
                     else:
                         new_rho = 2 - rho_hor
                         if plot_upper_hem:
@@ -3223,27 +2868,26 @@ class BeachBall:
 
         return 1
 
-    #---------------------------------------------------------------
-
     def _lambert_vertical(self):
         """
-        Lambert azimuthal equal-area 2D projection onto a plane, tangent to the lowest point (0,0,1).
+        Lambert azimuthal equal-area 2D projection onto a plane, tangent to the
+        lowest point (0,0,1).
 
         Keeps the area constant!
 
         The parts in the lower hemisphere are projected to the unit
-        sphere (only here the area is kept constant), the upper half to an annular region between radii r=1
-        and r=2. If the attribute '_show_upper_hemis' is set, the
-        projection is reversed.
+        sphere (only here the area is kept constant), the upper half to an
+        annular region between radii r=1 and r=2. If the attribute
+        '_show_upper_hemis' is set, the projection is reversed.
         """
-
-        objects_2_project = [
-            'all_EV', 'all_BV', 'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        objects_2_project = ['all_EV', 'all_BV', 'nodalline_negative',
+                             'nodalline_positive', 'FP1', 'FP2']
 
         available_coord_systems = ['NED']
 
         if not self._plot_basis in available_coord_systems:
-            print 'requested plotting projection not possible - choose from :\n', avail_coord_systems
+            print 'desired plotting projection not possible - choose from :\n',
+            print available_coord_systems
             raise MTError(' !! ')
 
         plot_upper_hem = self._plot_show_upper_hemis
@@ -3256,13 +2900,11 @@ class BeachBall:
             n_points = len(o2proj[0, :])
             coords2D = np.zeros((2, n_points))
 
-            for ll in np.arange(n_points):
+            for ll in xrange(n_points):
                 # second component is EAST
                 co_x = coords[1, ll]
-
                 # first component is NORTH
                 co_y = coords[0, ll]
-
                 # z given in DOWN
                 co_z = -coords[2, ll]
 
@@ -3277,7 +2919,6 @@ class BeachBall:
                     else:
                         if co_z > 0:
                             new_x = 2
-
                 else:
                     if co_z < 0:
                         new_rho = rho_hor / np.sqrt(1. - co_z)
@@ -3305,10 +2946,10 @@ class BeachBall:
 
         return 1
 
-    #---------------------------------------------------------------
     def _gnomonic_vertical(self):
         """
-        Gnomonic 2D projection onto a plane, tangent to the lowest point (0,0,1).
+        Gnomonic 2D projection onto a plane, tangent to the lowest
+        point (0,0,1).
 
         Keeps the great circles as straight lines (geodetics constant) !
 
@@ -3318,13 +2959,14 @@ class BeachBall:
         projection is reversed.
         """
 
-        objects_2_project = [
-            'all_EV', 'all_BV', 'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        objects_2_project = ['all_EV', 'all_BV', 'nodalline_negative',
+                             'nodalline_positive', 'FP1', 'FP2']
 
         available_coord_systems = ['NED']
 
         if not self._plot_basis in available_coord_systems:
-            print 'requested plotting projection not possible - choose from :\n', avail_coord_systems
+            print 'desired plotting projection not possible - choose from :\n',
+            print available_coord_systems
             raise MTError(' !! ')
 
         plot_upper_hem = self._plot_show_upper_hemis
@@ -3337,13 +2979,11 @@ class BeachBall:
             n_points = len(o2proj[0, :])
             coords2D = np.zeros((2, n_points))
 
-            for ll in np.arange(n_points):
+            for ll in xrange(n_points):
                 # second component is EAST
                 co_x = coords[1, ll]
-
                 # first component is NORTH
                 co_y = coords[0, ll]
-
                 # z given in DOWN
                 co_z = -coords[2, ll]
 
@@ -3356,28 +2996,25 @@ class BeachBall:
                         new_x = 2
                         if plot_upper_hem:
                             new_x = 0
-
                 else:
                     if co_z < 0:
-                        new_rho = np.cos(
-                            np.arcsin(rho_hor)) * np.tan(np.arcsin(rho_hor))
+                        new_rho = np.cos(np.arcsin(rho_hor)) * \
+                            np.tan(np.arcsin(rho_hor))
 
                         if plot_upper_hem:
-                            new_rho = 2 - \
-                                (np.cos(np.arcsin(rho_hor)) * np.tan(
-                                    np.arcsin(rho_hor)))
+                            new_rho = 2 - (np.cos(np.arcsin(rho_hor)) *
+                                           np.tan(np.arcsin(rho_hor)))
 
                         new_x = co_x / rho_hor * new_rho
                         new_y = co_y / rho_hor * new_rho
 
                     else:
-                        new_rho =  2 - \
-                            (np.cos(np.arcsin(rho_hor)) * np.tan(
-                                np.arcsin(rho_hor)))
+                        new_rho = 2 - (np.cos(np.arcsin(rho_hor)) *
+                                       np.tan(np.arcsin(rho_hor)))
 
                         if plot_upper_hem:
-                            new_rho = np.cos(
-                                np.arcsin(rho_hor)) * np.tan(np.arcsin(rho_hor))
+                            new_rho = np.cos(np.arcsin(rho_hor)) * \
+                                np.tan(np.arcsin(rho_hor))
 
                         new_x = co_x / rho_hor * new_rho
                         new_y = co_y / rho_hor * new_rho
@@ -3390,15 +3027,13 @@ class BeachBall:
 
         return 1
 
-    #---------------------------------------------------------------
-
     def _build_circles(self):
         """
-        Sets two sets of points, describing the unit sphere and the outer circle with r=2.
+        Sets two sets of points, describing the unit sphere and the outer
+        circle with r=2.
 
         Added as attributes '_unit_sphere' and '_outer_circle'.
         """
-
         phi = self._phi_curve
 
         UnitSphere = np.zeros((2, len(phi)))
@@ -3411,33 +3046,27 @@ class BeachBall:
         self._unit_sphere = UnitSphere
         self._outer_circle = outer_circle_points
 
-    #---------------------------------------------------------------
     def _sort_curve_points(self, curve):
         """
         Checks, if curve points are in right order for line plotting.
 
         If not, a re-arranging is carried out.
-
         """
-
-
         sorted_curve = np.zeros((2, len(curve[0, :])))
-
         # in polar coordinates
-        #
         r_phi_curve = np.zeros((len(curve[0, :]), 2))
-        for ii in np.arange(len(curve[0, :])):
-            r_phi_curve[ii, 0] = np.sqrt(curve[0, ii] ** 2 + curve[1, ii] ** 2)
-            r_phi_curve[ii, 1] = np.arctan2(
-                curve[0, ii], curve[1, ii]) % (2 * pi)
-
+        for ii in xrange(curve.shape[1]):
+            r_phi_curve[ii, 0] = \
+                math.sqrt(curve[0, ii] ** 2 + curve[1, ii] ** 2)
+            r_phi_curve[ii, 1] = \
+                math.atan2(curve[0, ii], curve[1, ii]) % (2 * pi)
         # find index with highest r
         largest_r_idx = np.argmax(r_phi_curve[:, 0])
 
         # check, if perhaps more values with same r - if so, take point with
         # lowest phi
-        other_idces = list(
-            np.where(r_phi_curve[:, 0] == r_phi_curve[largest_r_idx, 0]))
+        other_idces = \
+            list(np.where(r_phi_curve[:, 0] == r_phi_curve[largest_r_idx, 0]))
         if len(other_idces) > 1:
             best_idx = np.argmin(r_phi_curve[other_idces, 1])
             start_idx_curve = other_idces[best_idx]
@@ -3446,10 +3075,8 @@ class BeachBall:
 
         if not start_idx_curve == 0:
             pass
-            #logger.debug( 'redefined start point to %i for curve\n'%(start_idx_curve) )
 
         # check orientation - want to go inwards
-
         start_r = r_phi_curve[start_idx_curve, 0]
         next_idx = (start_idx_curve + 1) % len(r_phi_curve[:, 0])
         prep_idx = (start_idx_curve - 1) % len(r_phi_curve[:, 0])
@@ -3457,33 +3084,27 @@ class BeachBall:
 
         keep_direction = True
         if next_r <= start_r:
-            # check, if next R is on other side of area - look at total distance
-            # if yes, reverse direction
-            dist_first_next  = (curve[0, next_idx] - curve[0, start_idx_curve]) ** 2\
-                + \
-                (curve[1, next_idx] - curve[
-                    1, start_idx_curve]) ** 2
-            dist_first_other = (curve[0, prep_idx] - curve[0, start_idx_curve]) ** 2\
-                + \
-                (curve[1, prep_idx] - curve[
-                    1, start_idx_curve]) ** 2
+            # check, if next R is on other side of area - look at total
+            # distance - if yes, reverse direction
+            dist_first_next = \
+                (curve[0, next_idx] - curve[0, start_idx_curve]) ** 2 + \
+                (curve[1, next_idx] - curve[1, start_idx_curve]) ** 2
+            dist_first_other = \
+                (curve[0, prep_idx] - curve[0, start_idx_curve]) ** 2 + \
+                (curve[1, prep_idx] - curve[1, start_idx_curve]) ** 2
 
             if dist_first_next > dist_first_other:
                 keep_direction = False
 
         if keep_direction:
-            #direction is kept
-
-            #logger.debug( 'curve with same direction as before\n' )
-            for jj in np.arange(len(curve[0, :])):
+            # direction is kept
+            for jj in xrange(curve.shape[1]):
                 running_idx = (start_idx_curve + jj) % len(curve[0, :])
                 sorted_curve[0, jj] = curve[0, running_idx]
                 sorted_curve[1, jj] = curve[1, running_idx]
-
         else:
-            #direction  is reversed
-            #logger.debug( 'curve with reverted direction\n' )
-            for jj in np.arange(len(curve[0, :])):
+            # direction  is reversed
+            for jj in xrange(curve.shape[1]):
                 running_idx = (start_idx_curve - jj) % len(curve[0, :])
                 sorted_curve[0, jj] = curve[0, running_idx]
                 sorted_curve[1, jj] = curve[1, running_idx]
@@ -3493,12 +3114,13 @@ class BeachBall:
         # edge - if this first angle step is larger than the one between
         # points 2 and three, correct position of first point: keep R, but
         # take angle with same difference as point 2 to point 3
-        angle_point_1 = (
-            np.arctan2(sorted_curve[0, 0], sorted_curve[1, 0]) % (2 * pi))
-        angle_point_2 = (
-            np.arctan2(sorted_curve[0, 1], sorted_curve[1, 1]) % (2 * pi))
-        angle_point_3 = (
-            np.arctan2(sorted_curve[0, 2], sorted_curve[1, 2]) % (2 * pi))
+
+        angle_point_1 = (math.atan2(sorted_curve[0, 0],
+                                    sorted_curve[1, 0]) % (2 * pi))
+        angle_point_2 = (math.atan2(sorted_curve[0, 1],
+                                    sorted_curve[1, 1]) % (2 * pi))
+        angle_point_3 = (math.atan2(sorted_curve[0, 2],
+                                    sorted_curve[1, 2]) % (2 * pi))
 
         angle_diff_23 = (angle_point_3 - angle_point_2)
         if angle_diff_23 > pi:
@@ -3508,15 +3130,15 @@ class BeachBall:
         if angle_diff_12 > pi:
             angle_diff_12 = (-angle_diff_12) % (2 * pi)
 
-        if np.abs(angle_diff_12) > np.abs(angle_diff_23):
-            r_old = np.sqrt(sorted_curve[0, 0] ** 2 + sorted_curve[1, 0] ** 2)
+        if abs(angle_diff_12) > abs(angle_diff_23):
+            r_old = \
+                math.sqrt(sorted_curve[0, 0] ** 2 + sorted_curve[1, 0] ** 2)
             new_angle = (angle_point_2 - angle_diff_23) % (2 * pi)
-            sorted_curve[0, 0] = r_old * np.sin(new_angle)
-            sorted_curve[1, 0] = r_old * np.cos(new_angle)
+            sorted_curve[0, 0] = r_old * math.sin(new_angle)
+            sorted_curve[1, 0] = r_old * math.cos(new_angle)
 
         return sorted_curve
 
-    #---------------------------------------------------------------
     def _smooth_curves(self):
         """
         Corrects curves for potential large gaps, resulting in strange
@@ -3524,11 +3146,9 @@ class BeachBall:
         areas.
 
         At least one coordinte point on each degree on the circle is assured.
-
         """
-
-        list_of_curves_2_smooth = [
-            'nodalline_negative', 'nodalline_positive', 'FP1', 'FP2']
+        list_of_curves_2_smooth = ['nodalline_negative', 'nodalline_positive',
+                                   'FP1', 'FP2']
 
         points_per_degree = self._plot_n_points / 360.
 
@@ -3538,13 +3158,14 @@ class BeachBall:
 
             smoothed_array = np.zeros((1, 2))
             smoothed_array[0, :] = obj[0]
+            smoothed_list = [smoothed_array]
 
-            #now in shape (n_points,2)
+            # now in shape (n_points,2)
             for idx, val in enumerate(obj[:-1]):
-                r1 = np.sqrt(val[0] ** 2 + val[1] ** 2)
-                r2 = np.sqrt(obj[idx + 1][0] ** 2 + obj[idx + 1][1] ** 2)
-                phi1 = np.arctan2(val[0], val[1])
-                phi2 = np.arctan2(obj[idx + 1][0], obj[idx + 1][1])
+                r1 = math.sqrt(val[0] ** 2 + val[1] ** 2)
+                r2 = math.sqrt(obj[idx + 1][0] ** 2 + obj[idx + 1][1] ** 2)
+                phi1 = math.atan2(val[0], val[1])
+                phi2 = math.atan2(obj[idx + 1][0], obj[idx + 1][1])
 
                 phi2_larger = np.sign(phi2 - phi1)
                 angle_smaller_pi = np.sign(pi - abs(phi2 - phi1))
@@ -3564,28 +3185,25 @@ class BeachBall:
                     n_fillpoints = int(openangle_deg * points_per_degree)
                     fill_array = np.zeros((n_fillpoints, 2))
                     if go_cw:
-                        angles = (
-                            (np.arange(n_fillpoints) + 1) * openangle / (n_fillpoints + 1) + phi1) % (2 * pi)
+                        angles = ((np.arange(n_fillpoints) + 1) * openangle /
+                                  (n_fillpoints + 1) + phi1) % (2 * pi)
                     else:
-                        angles = (
-                            phi1 - (np.arange(n_fillpoints) + 1) * openangle / (n_fillpoints + 1)) % (2 * pi)
+                        angles = (phi1 - (np.arange(n_fillpoints) + 1) *
+                                  openangle / (n_fillpoints + 1)) % (2 * pi)
 
-                    radii = (np.arange(n_fillpoints) + 1) * radius_diff / (
-                        n_fillpoints + 1) + r1
+                    radii = (np.arange(n_fillpoints) + 1) * \
+                        radius_diff / (n_fillpoints + 1) + r1
 
                     fill_array[:, 0] = radii * np.sin(angles)
                     fill_array[:, 1] = radii * np.cos(angles)
 
-                    smoothed_array = np.append(
-                        smoothed_array, fill_array, axis=0)
+                    smoothed_list.append(fill_array)
 
-                smoothed_array = np.append(
-                    smoothed_array, [obj[idx + 1]], axis=0)
+                smoothed_list.append([obj[idx + 1]])
 
-            setattr(self, '_' + curve2smooth +
-                    '_final', smoothed_array.transpose())
-
-    #---------------------------------------------------------------
+            smoothed_array = np.vstack(smoothed_list)
+            setattr(self, '_' + curve2smooth + '_final',
+                    smoothed_array.transpose())
 
     def _check_curve_in_curve(self):
         """
@@ -3593,42 +3211,45 @@ class BeachBall:
         completely. If so, the order of colours is re-adapted,
         assuring the correct order when doing the overlay plotting.
         """
-
-        lo_points_in_pos_curve = list(
-            self._nodalline_positive_final.transpose())
-        lo_points_in_neg_curve = list(
-            self._nodalline_negative_final.transpose())
+        lo_points_in_pos_curve = \
+            list(self._nodalline_positive_final.transpose())
+        lo_points_in_pos_curve_array = \
+            self._nodalline_positive_final.transpose()
+        lo_points_in_neg_curve = \
+            list(self._nodalline_negative_final.transpose())
+        lo_points_in_neg_curve_array = \
+            self._nodalline_negative_final.transpose()
 
         # check, if negative curve completely within positive curve
         mask_neg_in_pos = 0
         for neg_point in lo_points_in_neg_curve:
-            #mask_neg_in_pos *=  self._point_inside_polygon(neg_point[0], neg_point[1],lo_points_in_pos_curve )
-            mask_neg_in_pos += self._pnpoly(
-                np.array(lo_points_in_pos_curve), np.array([neg_point[0], neg_point[1]]))
+            mask_neg_in_pos += self._pnpoly(lo_points_in_pos_curve_array,
+                                            neg_point[:2])
         if mask_neg_in_pos > len(lo_points_in_neg_curve) - 3:
             self._plot_curve_in_curve = 1
 
         # check, if positive curve completely within negative curve
         mask_pos_in_neg = 0
         for pos_point in lo_points_in_pos_curve:
-            mask_pos_in_neg += self._pnpoly(
-                np.array(lo_points_in_neg_curve), np.array([pos_point[0], pos_point[1]]))
+            mask_pos_in_neg += self._pnpoly(lo_points_in_neg_curve_array,
+                                            pos_point[:2])
         if mask_pos_in_neg > len(lo_points_in_pos_curve) - 3:
             self._plot_curve_in_curve = -1
 
-        # correct for ONE special case: double couple with its eigensystem =
-        # NED basis system:
+        # correct for ONE special case: double couple with its
+        # eigensystem = NED basis system:
         testarray = [1., 0, 0, 0, 1, 0, 0, 0, 1]
-        if np.prod(self.MT._rotation_matrix.A1 == testarray) and (self.MT._eigenvalues[1] == 0):
+        if np.prod(self.MT._rotation_matrix.A1 == testarray) and \
+           (self.MT._eigenvalues[1] == 0):
             self._plot_curve_in_curve = -1
             self._plot_clr_order = 1
 
-    #-------------------------------------------------------------------
-    #    determine if a point is inside a given polygon or not
-    # Polygon is a list of (x,y) pairs.<
-
     def _point_inside_polygon(self, x, y, poly):
+        """
+        Determine if a point is inside a given polygon or not.
 
+        Polygon is a list of (x,y) pairs.
+        """
         n = len(poly)
         inside = False
 
@@ -3639,35 +3260,37 @@ class BeachBall:
                 if y <= max(p1y, p2y):
                     if x <= max(p1x, p2x):
                         if p1y != p2y:
-                            xinters = (
-                                y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                            xinters = \
+                                (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
                         if p1x == p2x or x <= xinters:
                             inside = not inside
             p1x, p1y = p2x, p2y
 
         return inside
-    #---------------------------------------------------------------
 
     def _pnpoly(self, verts, point):
-        """Check whether point is in the polygon defined by verts.
+        """
+        Check whether point is in the polygon defined by verts.
 
         verts - 2xN array
         point - (2,) array
 
-        See http://www.ecse.rpi.edu/Homepages/wrf/Research/Short_Notes/pnpoly.html
+        See
+        http://www.ecse.rpi.edu/Homepages/wrf/Research/Short_Notes/pnpoly.html
         """
-
-        verts = verts.astype(float)
+        # using take instead of getitem, about ten times faster, see
+        # http://wesmckinney.com/blog/?p=215
+        verts = np.require(verts, dtype=np.float64)
         x, y = point
 
         xpi = verts[:, 0]
         ypi = verts[:, 1]
         # shift
-        xpj = xpi[np.arange(xpi.size) - 1]
-        ypj = ypi[np.arange(ypi.size) - 1]
+        xpj = xpi.take(self.arange_1[:xpi.size])
+        ypj = ypi.take(self.arange_1[:ypi.size])
 
-        possible_crossings = ((ypi <= y) & (y < ypj)) | (
-            (ypj <= y) & (y < ypi))
+        possible_crossings = \
+            ((ypi <= y) & (y < ypj)) | ((ypj <= y) & (y < ypi))
 
         xpi = xpi[possible_crossings]
         ypi = ypi[possible_crossings]
@@ -3676,8 +3299,7 @@ class BeachBall:
 
         crossings = x < (xpj - xpi) * (y - ypi) / (ypj - ypi) + xpi
 
-        return sum(crossings) % 2
-    #---------------------------------------------------------------
+        return crossings.sum() % 2
 
     def _projection_2_unit_sphere(self):
         """
@@ -3685,12 +3307,10 @@ class BeachBall:
         onto the unit sphere by just shrinking the maximum radius of
         all points to 1.
 
-
         This keeps the area definitions, so the colouring is not affected.
         """
-
-        list_of_objects_2_project = [
-            'nodalline_positive_final', 'nodalline_negative_final']
+        list_of_objects_2_project = ['nodalline_positive_final',
+                                     'nodalline_negative_final']
         lo_fps = ['FP1_final', 'FP2_final']
 
         for obj2proj in list_of_objects_2_project:
@@ -3731,7 +3351,7 @@ class BeachBall:
         direction_letters = list('NSEWDU')
 
         for idx, val in enumerate(self._all_BV_2D.transpose()):
-            r_bv = np.sqrt(val[0] ** 2 + val[1] ** 2)
+            r_bv = math.sqrt(val[0] ** 2 + val[1] ** 2)
             if r_bv <= 1:
                 if idx == 1 and 'N' in dummy_list1:
                     continue
@@ -3747,54 +3367,39 @@ class BeachBall:
 
         self._all_BV_2D_US = visible_BVs
 
-   #---------------------------------------------------------------
-
-    def _plot_US(self):
+    def _plot_US(self, ax=None):
         """
-        Method for generating the final plot of the beachball projection on the unit sphere.
-
+        Generates the final plot of the beachball projection on the unit
+        sphere.
 
         Additionally, the plot can be saved in a file on the fly.
-
-
-
-
         """
-
-        import matplotlib
         import pylab as P
-        from matplotlib import interactive
 
-        plotfig = self._setup_plot_US(P)
+        plotfig = self._setup_plot_US(P, ax=ax)
 
         if self._plot_save_plot:
             try:
-                plotfig.savefig(
-                    self._plot_outfile + '.' + self._plot_outfile_format, dpi=self._plot_dpi, transparent=True,
-                    format=self._plot_outfile_format)
-
+                plotfig.savefig(self._plot_outfile + '.' +
+                                self._plot_outfile_format, dpi=self._plot_dpi,
+                                transparent=True,
+                                format=self._plot_outfile_format)
             except:
                 print 'saving of plot not possible'
-
         P.show()
-
         P.close('all')
-        del P
-        del matplotlib
 
-#-------------------------------------------------------------------
-    def _setup_plot_US(self, P):
+    def _setup_plot_US(self, P, ax=None):
         """
         Setting up the figure with the final plot of the unit sphere.
 
         Either called by _plot_US or by _just_save_bb
         """
-
         P.close(667)
-        plotfig = P.figure(667, figsize=(self._plot_size, self._plot_size))
-        plotfig.subplots_adjust(left=0, bottom=0, right=1, top=1)
-
-        ax = plotfig.add_subplot(111, aspect='equal')
+        if ax is None:
+            plotfig = P.figure(667, figsize=(self._plot_size, self._plot_size))
+            plotfig.subplots_adjust(left=0, bottom=0, right=1, top=1)
+            ax = plotfig.add_subplot(111, aspect='equal')
 
         ax.axison = False
 
@@ -3809,104 +3414,138 @@ class BeachBall:
         pressure_colour = self._plot_pressure_colour
 
         if self._plot_fill_flag:
-
             if self._plot_clr_order > 0:
+                alpha = self._plot_fill_alpha * self._plot_total_alpha
 
-                ax.fill(US[0, :], US[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
-                ax.fill( neg_nodalline[0, :], neg_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                ax.fill(US[0, :], US[1, :], fc=pressure_colour, alpha=alpha)
+                ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                        fc=tension_colour, alpha=alpha)
+                ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                        fc=tension_colour, alpha=alpha)
 
                 if self._plot_curve_in_curve != 0:
-                    ax.fill(US[0, :], US[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                    ax.fill(US[0, :], US[1, :], fc=tension_colour,
+                            alpha=alpha)
 
                     if self._plot_curve_in_curve < 1:
-                        ax.fill(neg_nodalline[0, :], neg_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                                fc=pressure_colour, alpha=alpha)
+                        ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                                fc=tension_colour, alpha=alpha)
                         pass
                     else:
-                        ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( neg_nodalline[0, :], neg_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                                fc=pressure_colour, alpha=alpha)
+                        ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                                fc=tension_colour, alpha=alpha)
                         pass
 
                 EV_sym = ['m^', 'b^', 'g^', 'mv', 'bv', 'gv']
-                EV_labels = ['P', 'N', 'T', 'P', 'N', 'T']
 
                 if self._plot_show_princ_axes:
+                    alpha = \
+                        self._plot_princ_axes_alpha * self._plot_total_alpha
+
                     for val in self._all_EV_2D_US:
-                        ax.plot(
-                            [val[0]], [val[1]], EV_sym[
-                                int(val[2])], ms=self._plot_princ_axes_symsize,
-                            lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
+                        ax.plot([val[0]], [val[1]], EV_sym[int(val[2])],
+                                ms=self._plot_princ_axes_symsize,
+                                lw=self._plot_princ_axes_lw, alpha=alpha)
 
             else:
-                ax.fill(US[0, :], US[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
-                ax.fill( neg_nodalline[0, :], neg_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                alpha = self._plot_fill_alpha * self._plot_total_alpha
+
+                ax.fill(US[0, :], US[1, :], fc=tension_colour, alpha=alpha)
+                ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                        fc=pressure_colour, alpha=alpha)
+                ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                        fc=pressure_colour, alpha=alpha)
 
                 if self._plot_curve_in_curve != 0:
-                    ax.fill(US[0, :], US[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha )
+                    ax.fill(US[0, :], US[1, :], fc=pressure_colour,
+                            alpha=alpha)
 
                     if self._plot_curve_in_curve < 1:
-                        ax.fill( neg_nodalline[0, :], neg_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                                fc=tension_colour, alpha=alpha)
+                        ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                                fc=pressure_colour, alpha=alpha)
                         pass
                     else:
-                        ax.fill( pos_nodalline[0, :], pos_nodalline[1,:], fc=tension_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
-                        ax.fill( neg_nodalline[0, :], neg_nodalline[1,:], fc=pressure_colour, alpha= self._plot_fill_alpha*self._plot_total_alpha)
+                        ax.fill(pos_nodalline[0, :], pos_nodalline[1, :],
+                                fc=tension_colour, alpha=alpha)
+                        ax.fill(neg_nodalline[0, :], neg_nodalline[1, :],
+                                fc=pressure_colour, alpha=alpha)
                         pass
 
         EV_sym = ['g^', 'b^', 'm^', 'gv', 'bv', 'mv']
-        #EV_labels = ['T','N','P','T','N','P']
         if self._plot_show_princ_axes:
+            alpha = self._plot_princ_axes_alpha * self._plot_total_alpha
+
             for val in self._all_EV_2D_US:
-                ax.plot(
-                    [val[0]], [val[1]], EV_sym[
-                        int(val[2])], ms=self._plot_princ_axes_symsize,
-                    lw=self._plot_princ_axes_lw, alpha=self._plot_princ_axes_alpha * self._plot_total_alpha)
-
-
+                ax.plot([val[0]], [val[1]], EV_sym[int(val[2])],
+                        ms=self._plot_princ_axes_symsize,
+                        lw=self._plot_princ_axes_lw, alpha=alpha)
 
         #
         # set all nodallines and faultplanes for plotting:
         #
 
-        ax.plot( neg_nodalline[0, :], neg_nodalline[1,:], c=self._plot_nodalline_colour, ls='-', lw=self._plot_nodalline_width, alpha=self._plot_nodalline_alpha*self._plot_total_alpha )
+        ax.plot(neg_nodalline[0, :], neg_nodalline[1, :],
+                c=self._plot_nodalline_colour, ls='-',
+                lw=self._plot_nodalline_width,
+                alpha=self._plot_nodalline_alpha * self._plot_total_alpha)
+        #ax.plot( neg_nodalline[0,:] ,neg_nodalline[1,:],'go')
 
-        ax.plot( pos_nodalline[0, :], pos_nodalline[1,:], c=self._plot_nodalline_colour, ls='-', lw=self._plot_nodalline_width, alpha=self._plot_nodalline_alpha*self._plot_total_alpha)
+        ax.plot(pos_nodalline[0, :], pos_nodalline[1, :],
+                c=self._plot_nodalline_colour, ls='-',
+                lw=self._plot_nodalline_width,
+                alpha=self._plot_nodalline_alpha * self._plot_total_alpha)
 
         if self._plot_show_faultplanes:
-
-            ax.plot( FP1_2_plot[0, :], FP1_2_plot[1,:], c=self._plot_faultplane_colour, ls='-', lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha)
-
-            ax.plot( FP2_2_plot[0, :], FP2_2_plot[1,:], c=self._plot_faultplane_colour, ls='-', lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha)
+            ax.plot(FP1_2_plot[0, :], FP1_2_plot[1, :],
+                    c=self._plot_faultplane_colour, ls='-',
+                    lw=self._plot_faultplane_width,
+                    alpha=self._plot_faultplane_alpha * self._plot_total_alpha)
+            ax.plot(FP2_2_plot[0, :], FP2_2_plot[1, :],
+                    c=self._plot_faultplane_colour, ls='-',
+                    lw=self._plot_faultplane_width,
+                    alpha=self._plot_faultplane_alpha * self._plot_total_alpha)
 
         elif self._plot_show_1faultplane:
             if not self._plot_show_FP_index in [1, 2]:
-                print 'no fault plane specified for being plotted... continue without faultplane'
+                print 'no fault plane specified for being plotted... ',
+                print 'continue without faultplane'
                 pass
             else:
+                alpha = self._plot_faultplane_alpha * self._plot_total_alpha
                 if self._plot_show_FP_index == 1:
-
-                    ax.plot( FP1_2_plot[0, :], FP1_2_plot[1,:], c=self._plot_faultplane_colour, ls='-', lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha)
-
+                    ax.plot(FP1_2_plot[0, :], FP1_2_plot[1, :],
+                            c=self._plot_faultplane_colour, ls='-',
+                            lw=self._plot_faultplane_width, alpha=alpha)
                 else:
-                    ax.plot( FP2_2_plot[0, :], FP2_2_plot[1,:], c=self._plot_faultplane_colour, ls='-', lw=self._plot_faultplane_width, alpha=self._plot_faultplane_alpha*self._plot_total_alpha)
+                    ax.plot(FP2_2_plot[0, :], FP2_2_plot[1, :],
+                            c=self._plot_faultplane_colour, ls='-',
+                            lw=self._plot_faultplane_width, alpha=alpha)
 
         # if isotropic part shall be displayed, fill the circle completely with
         # the appropriate colour
+
         if self._pure_isotropic:
             # f abs( np.trace( self._M )) > epsilon:
             if self._plot_clr_order < 0:
-                ax.fill( US[0, :], US[1,:], fc=tension_colour, alpha= 1, zorder=100 )
+                ax.fill(US[0, :], US[1, :], fc=tension_colour, alpha=1,
+                        zorder=100)
             else:
-                ax.fill( US[0, :], US[1,:], fc=pressure_colour, alpha= 1, zorder=100 )
+                ax.fill(US[0, :], US[1, :], fc=pressure_colour, alpha=1,
+                        zorder=100)
 
         # plot outer circle line of US
-        ax.plot(US[0, :], US[1,:], c=self._plot_outerline_colour, ls='-', lw=self._plot_outerline_width, alpha= self._plot_outerline_alpha*self._plot_total_alpha )
+        ax.plot(US[0, :], US[1, :], c=self._plot_outerline_colour, ls='-',
+                lw=self._plot_outerline_width,
+                alpha=self._plot_outerline_alpha * self._plot_total_alpha)
 
         # plot NED basis vectors
         if self._plot_show_basis_axes:
-
             plot_size_in_points = self._plot_size * 2.54 * 72
             points_per_unit = plot_size_in_points / 2.
 
@@ -3914,56 +3553,47 @@ class BeachBall:
             symsize = plot_size_in_points / 61.
 
             direction_letters = list('NSEWDU')
-            # print direction_letters
+
             for val in self._all_BV_2D_US:
-                # print val
                 x_coord = val[0]
                 y_coord = val[1]
                 np_letter = direction_letters[int(val[2])]
 
-                rot_angle = - np.arctan2(y_coord, x_coord) + pi / 2.
+                rot_angle = -np.arctan2(y_coord, x_coord) + pi / 2.
                 original_rho = np.sqrt(x_coord ** 2 + y_coord ** 2)
 
-                marker_x = (
-                    original_rho - (1.5 * symsize / points_per_unit)) * np.sin(rot_angle)
-                marker_y = (
-                    original_rho - (1.5 * symsize / points_per_unit)) * np.cos(rot_angle)
-                annot_x = (
-                    original_rho - (4.5 * fontsize / points_per_unit)) * np.sin(rot_angle)
-                annot_y = (
-                    original_rho - (4.5 * fontsize / points_per_unit)) * np.cos(rot_angle)
+                marker_x = (original_rho - (1.5 * symsize / points_per_unit)) \
+                    * np.sin(rot_angle)
+                marker_y = (original_rho - (1.5 * symsize / points_per_unit)) \
+                    * np.cos(rot_angle)
+                annot_x = (original_rho - (4.5 * fontsize / points_per_unit)) \
+                    * np.sin(rot_angle)
+                annot_y = (original_rho - (4.5 * fontsize / points_per_unit)) \
+                    * np.cos(rot_angle)
 
-                ax.text(
-                    annot_x, annot_y, np_letter, horizontalalignment='center', size=fontsize, weight='bold', verticalalignment='center',
-                    bbox=dict(edgecolor='white', facecolor='white', alpha=1))
+                ax.text(annot_x, annot_y, np_letter,
+                        horizontalalignment='center', size=fontsize,
+                        weight='bold', verticalalignment='center',
+                        bbox=dict(edgecolor='white', facecolor='white',
+                                  alpha=1))
 
                 if original_rho > epsilon:
-                    ax.scatter([marker_x], [marker_y], marker=(
-                        3, 0, rot_angle), s=symsize ** 2, c='k', facecolor='k', zorder=300)
+                    ax.scatter([marker_x], [marker_y],
+                               marker=(3, 0, rot_angle), s=symsize ** 2,
+                               c='k', facecolor='k', zorder=300)
                 else:
-                    ax.scatter([x_coord], [y_coord], marker=(
-                        4, 1, rot_angle), s=symsize ** 2, c='k', facecolor='k', zorder=300)
+                    ax.scatter([x_coord], [y_coord], marker=(4, 1, rot_angle),
+                               s=symsize ** 2, c='k', facecolor='k',
+                               zorder=300)
 
-        # plot 4 transparent fake points, guaranteeing full visibilty of the
-        # sphere in the plot
+        # plot 4 fake points, guaranteeing full visibilty of the sphere
         ax.plot([0, 1.05, 0, -1.05], [1.05, 0, -1.05, 0], ',', alpha=0.)
-
         # scaling behaviour
         ax.autoscale_view(tight=True, scalex=True, scaley=True)
 
         return plotfig
 
 
-#-------------------------------------------------------------------
-#-------------------------------------------------------------------
-#-------------------------------------------------------------------
-#
-#
-#  input and call management, if run from the shell !!
-#
-#
-#-------------------------------------------------------------------
-#-------------------------------------------------------------------
 if __name__ == "__main__":
 
     import os
@@ -3983,8 +3613,8 @@ if __name__ == "__main__":
                               't', 'n', 'p')
 
     decomp_attrib_map = dict(zip(decomp_attrib_map_keys,
-                                 ('input_system', 'output_system', 'decomp_type',
-                                  'M',
+                                 ('input_system', 'output_system',
+                                  'decomp_type', 'M',
                                   'iso', 'iso_percentage',
                                   'devi', 'devi', 'devi_percentage',
                                   'DC', 'DC_percentage',
@@ -3998,7 +3628,6 @@ if __name__ == "__main__":
 
     lo_allowed_systems = ['NED', 'USE', 'XYZ', 'NWU']
 
-    #------------------------------------------------------------------
     def _handle_input(call, M_in, call_args, optparser):
         """
         take the original method and its arguments, the source mechanism,
@@ -4026,7 +3655,8 @@ if __name__ == "__main__":
 
             if kwargs['plot_part_of_m'] == 'devi':
                 mt = MomentTensor(
-                    M=mt.get_devi(), in_system=in_system, out_system=out_system)
+                    M=mt.get_devi(), in_system=in_system,
+                    out_system=out_system)
 
             if kwargs['plot_part_of_m'] == 'dc':
                 mt = MomentTensor(
@@ -4034,12 +3664,12 @@ if __name__ == "__main__":
 
             if kwargs['plot_part_of_m'] == 'clvd':
                 mt = MomentTensor(
-                    M=mt.get_CLVD(), in_system=in_system, out_system=out_system)
+                    M=mt.get_CLVD(), in_system=in_system,
+                    out_system=out_system)
 
         # call the main routine to handle the moment tensor
         return _call_main(mt, call, kwargs)
 
-    #------------------------------------------------------------------
     def _call_main(MT, main_call, kwargs_dict):
 
         if main_call == 'plot':
@@ -4054,7 +3684,6 @@ if __name__ == "__main__":
         elif main_call == 'describe':
             return _call_describe(MT, kwargs_dict)
 
-    #------------------------------------------------------------------
     def _call_plot(MT, kwargs_dict):
 
         bb2plot = BeachBall(MT, kwargs_dict)
@@ -4062,8 +3691,6 @@ if __name__ == "__main__":
         if kwargs_dict['plot_save_plot']:
             bb2plot.save_BB(kwargs_dict)
             return
-
-        #import pylab as P
 
         if kwargs_dict['plot_pa_plot']:
             bb2plot.pa_plot(kwargs_dict)
@@ -4080,8 +3707,6 @@ if __name__ == "__main__":
     def _call_gmt(MT, kwargs_dict):
         bb = BeachBall(MT, kwargs_dict)
         return bb.get_psxy(kwargs_dict)
-
-    #------------------------------------------------------------------
 
     def _call_decompose(MT, kwargs_dict):
 
@@ -4111,21 +3736,50 @@ if __name__ == "__main__":
         if not lo_args:
             lo_args = decomp_attrib_map_keys
 
-        # for list of elements:
-        for arg in lo_args:
-            print getattr(MT, 'get_' + decomp_attrib_map[arg])(style='y', system=out_system)
+        labels = '''Basis system of the input
+Basis system of the output
+Decomposition type
+Full moment tensor
+Isotropic part
+Isotropic percentage
+Deviatoric part
+Deviatoric part
+Deviatoric percentage
+Double Couple part
+Double Couple percentage
+Second Double Couple part
+Second Double Couple's percentage
+Third Double Couple part
+Third Double Couple's percentage
+CLVD part in
+CLVD percentage
+Seismic moment (in Nm)
+Moment magnitude )
+Eigenvalues
+Eigenvectors
+Tension-axis
+Null-axis
+Pressure-axis'''.splitlines()
 
-    #------------------------------------------------------------------
+        # for list of elements:
+        for label, arg in zip(labels, lo_args):
+            getter = getattr(MT, 'get_' + decomp_attrib_map[arg])
+            x = getter(style='y', system=out_system)
+            print '%s: %s' % (label, x)
+
     def _call_describe(MT, kwargs_dict):
         print MT
 
     def _build_gmt_dict(options, optparser):
-
+        """
+        """
         consistent_kwargs_dict = {}
         temp_dict = {}
-        lo_allowed_options = [
-            'GMT_string_type', 'GMT_scaling', 'GMT_tension_colour', 'GMT_pressure_colour',
-            'GMT_show_2FP2', 'GMT_show_1FP', 'plot_viewpoint', 'GMT_plot_isotropic_part', 'GMT_projection']
+        lo_allowed_options = ['GMT_string_type', 'GMT_scaling',
+                              'GMT_tension_colour', 'GMT_pressure_colour',
+                              'GMT_show_2FP2', 'GMT_show_1FP',
+                              'plot_viewpoint', 'GMT_plot_isotropic_part',
+                              'GMT_projection']
 
         # check for allowed options:
         for ao in lo_allowed_options:
@@ -4135,10 +3789,8 @@ if __name__ == "__main__":
         if temp_dict['GMT_show_1FP']:
             try:
                 if int(float(temp_dict['GMT_show_1FP'])) in [1, 2]:
-
-                    consistent_kwargs_dict['_GMT_1fp'] = int(
-                        float(temp_dict['GMT_show_1FP']))
-
+                    consistent_kwargs_dict['_GMT_1fp'] = \
+                        int(float(temp_dict['GMT_show_1FP']))
             except:
                 pass
 
@@ -4149,7 +3801,7 @@ if __name__ == "__main__":
             consistent_kwargs_dict['_GMT_1fp'] = 0
 
         if temp_dict['GMT_string_type'][0].lower() not in ['f', 'l', 'e']:
-            print 'type of requested string not known - taking "fill" instead'
+            print 'type of desired string not known - taking "fill" instead'
             consistent_kwargs_dict['_GMT_type'] = 'fill'
 
         else:
@@ -4161,7 +3813,9 @@ if __name__ == "__main__":
                 consistent_kwargs_dict['_GMT_type'] = 'EVs'
 
         if float(temp_dict['GMT_scaling']) < epsilon:
-            print 'GMT scaling factor must be a factor larger than %f - set to 1, due to obviously stupid input value' % epsilon
+            print 'GMT scaling factor must be a factor larger than'
+            print '%f - set to 1, due to obviously stupid input value' % \
+                (epsilon)
             temp_dict['GMT_scaling'] = 1
 
         if temp_dict['plot_viewpoint']:
@@ -4175,48 +3829,46 @@ if __name__ == "__main__":
                     raise
                 if not 0 <= float(vp[2]) % 360 <= 360:
                     raise
-                consistent_kwargs_dict['plot_viewpoint'] = [
-                    float(vp[0]), float(vp[1]), float(vp[2])]
+                consistent_kwargs_dict['plot_viewpoint'] = \
+                    [float(vp[0]), float(vp[1]), float(vp[2])]
             except:
-                # print 'argument of "-V" must be of form "lat,lon,azi" with
-                # lat=[-90,90], lon=[-180,180], azi=[0,360]'
                 pass
 
         if temp_dict['GMT_projection']:
             lo_allowed_projections = ['stereo', 'ortho', 'lambert']  # ,'gnom']
-            do_allowed_projections = dict(
-                zip(('s', 'o', 'l', 'g'), ('stereo', 'ortho', 'lambert', 'gnom')))
+            do_allowed_projections = dict(zip(('s', 'o', 'l', 'g'),
+                                              ('stereo', 'ortho',
+                                               'lambert', 'gnom')))
             try:
-                if temp_dict['GMT_projection'].lower() in lo_allowed_projections:
-                    consistent_kwargs_dict['plot_projection'] = temp_dict[
-                        'GMT_projection'].lower()
-                elif temp_dict['GMT_projection'].lower() in do_allowed_projections.keys():
-                    consistent_kwargs_dict['plot_projection'] = do_allowed_projections[
-                        temp_dict['GMT_projection'].lower()]
+                gmtp = temp_dict['GMT_projection'].lower()
+                if gmtp in lo_allowed_projections:
+                    consistent_kwargs_dict['plot_projection'] = gmtp
+                elif gmtp in do_allowed_projections.keys():
+                    consistent_kwargs_dict['plot_projection'] = \
+                        do_allowed_projections[gmtp]
                 else:
                     consistent_kwargs_dict['plot_projection'] = 'stereo'
             except:
                 pass
 
-        consistent_kwargs_dict[
-            '_GMT_scaling'] = temp_dict['GMT_scaling']
-        consistent_kwargs_dict[
-            '_GMT_tension_colour'] = temp_dict['GMT_tension_colour']
-        consistent_kwargs_dict[
-            '_GMT_pressure_colour'] = temp_dict['GMT_pressure_colour']
-        consistent_kwargs_dict['_plot_isotropic_part'] = temp_dict[
-            'GMT_plot_isotropic_part']
+        consistent_kwargs_dict['_GMT_scaling'] = \
+            temp_dict['GMT_scaling']
+        consistent_kwargs_dict['_GMT_tension_colour'] = \
+            temp_dict['GMT_tension_colour']
+        consistent_kwargs_dict['_GMT_pressure_colour'] = \
+            temp_dict['GMT_pressure_colour']
+        consistent_kwargs_dict['_plot_isotropic_part'] = \
+            temp_dict['GMT_plot_isotropic_part']
 
         return consistent_kwargs_dict
-
-    #------------------------------------------------------------------
 
     def _build_decompose_dict(options, optparser):
 
         consistent_kwargs_dict = {}
         temp_dict = {}
-        lo_allowed_options = [
-            'decomp_out_complete', 'decomp_out_fancy', 'decomp_out_part', 'in_system', 'out_system', 'decomp_key']
+        lo_allowed_options = ['decomp_out_complete', 'decomp_out_fancy',
+                              'decomp_out_part', 'in_system', 'out_system',
+                              'decomp_key']
 
         # check for allowed options:
         for ao in lo_allowed_options:
@@ -4253,11 +3905,16 @@ if __name__ == "__main__":
         temp_dict = {}
 
         lo_allowed_options = [
-            'plot_outfile', 'plot_pa_plot', 'plot_full_sphere', 'plot_part_of_m',
-            'plot_viewpoint', 'plot_projection', 'plot_show_upper_hemis', 'plot_n_points', 'plot_size',
-            'plot_tension_colour', 'plot_pressure_colour', 'plot_total_alpha', 'plot_show_faultplanes',
-            'plot_show_1faultplane', 'plot_show_princ_axes', 'plot_show_basis_axes', 'plot_outerline',
-            'plot_nodalline', 'plot_dpi', 'plot_only_lines', 'plot_input_system', 'plot_isotropic_part']
+            'plot_outfile', 'plot_pa_plot',
+            'plot_full_sphere', 'plot_part_of_m', 'plot_viewpoint',
+            'plot_projection', 'plot_show_upper_hemis', 'plot_n_points',
+            'plot_size', 'plot_tension_colour', 'plot_pressure_colour',
+            'plot_total_alpha', 'plot_show_faultplanes',
+            'plot_show_1faultplane', 'plot_show_princ_axes',
+            'plot_show_basis_axes', 'plot_outerline', 'plot_nodalline',
+            'plot_dpi', 'plot_only_lines', 'plot_input_system',
+            'plot_isotropic_part']
+
         # check for allowed options:
         for ao in lo_allowed_options:
             if hasattr(options, ao):
@@ -4269,53 +3926,57 @@ if __name__ == "__main__":
             lo_possible_formats = ['svg', 'png', 'eps', 'pdf', 'ps']
 
             try:
-                (filepath, filename) = op.split(temp_dict['plot_outfile'])
+                (filepath, filename) = os.path.split(temp_dict['plot_outfile'])
                 if not filename:
                     filename = 'dummy_filename.svg'
-                (shortname, extension) = op.splitext(filename)
+                (shortname, extension) = os.path.splitext(filename)
                 if not shortname:
                     shortname = 'dummy_shortname'
 
                 if extension[1:].lower() in lo_possible_formats:
-                    consistent_kwargs_dict[
-                        'plot_outfile_format'] = extension[1:].lower()
+                    consistent_kwargs_dict['plot_outfile_format'] = \
+                        extension[1:].lower()
 
                     if shortname.endswith('.'):
-                        consistent_kwargs_dict['plot_outfile'] = op.realpath(
-                            op.abspath(op.join(os.curdir, filepath, shortname + extension[1:].lower())))
-
+                        consistent_kwargs_dict['plot_outfile'] = \
+                            os.path.realpath(os.path.abspath(os.path.join(
+                                os.curdir, filepath,
+                                shortname + extension[1:].lower())))
                     else:
-                        consistent_kwargs_dict['plot_outfile'] = op.realpath(
-                            op.abspath(op.join(os.curdir, filepath, shortname + '.' + extension[1:].lower())))
+                        consistent_kwargs_dict['plot_outfile'] = \
+                            os.path.realpath(os.path.abspath(os.path.join(
+                                os.curdir, filepath, shortname + '.' +
+                                extension[1:].lower())))
                 else:
                     if filename.endswith('.'):
-                        consistent_kwargs_dict['plot_outfile'] = op.realpath(
-                            op.abspath(op.join(os.curdir, filepath, filename + lo_possible_formats[0])))
+                        consistent_kwargs_dict['plot_outfile'] = \
+                            os.path.realpath(os.path.abspath(os.path.join(
+                                os.curdir, filepath,
+                                filename + lo_possible_formats[0])))
                     else:
-                        consistent_kwargs_dict['plot_outfile'] = op.realpath(
-                            op.abspath(op.join(os.curdir, filepath, filename + '.' + lo_possible_formats[0])))
-                    consistent_kwargs_dict[
-                        'plot_outfile_format'] = lo_possible_formats[0]
+                        consistent_kwargs_dict['plot_outfile'] = \
+                            os.path.realpath(os.path.abspath(os.path.join(
+                                os.curdir, filepath, filename + '.' +
+                                lo_possible_formats[0])))
+                    consistent_kwargs_dict['plot_outfile_format'] = \
+                        lo_possible_formats[0]
 
             except:
-                exit(
-                    'please provide valid filename: <name>.<format>  !!\n  <format> must be svg, png, eps, pdf, or ps ')
+                msg = 'please provide valid filename: <name>.<format>  !!\n'
+                msg += ' <format> must be svg, png, eps, pdf, or ps '
+                exit(msg)
 
         if temp_dict['plot_pa_plot']:
             consistent_kwargs_dict['plot_pa_plot'] = True
         else:
             consistent_kwargs_dict['plot_pa_plot'] = False
 
-        #
-        #
         if temp_dict['plot_full_sphere']:
             consistent_kwargs_dict['plot_full_sphere'] = True
             consistent_kwargs_dict['plot_pa_plot'] = False
         else:
             consistent_kwargs_dict['plot_full_sphere'] = False
 
-        #
-        #
         if temp_dict['plot_part_of_m']:
             try:
                 plottable_part_raw = temp_dict['plot_part_of_m'].lower()[:2]
@@ -4338,8 +3999,6 @@ if __name__ == "__main__":
         else:
             consistent_kwargs_dict['plot_part_of_m'] = False
 
-        #
-        #
         if temp_dict['plot_viewpoint']:
             try:
                 vp = temp_dict['plot_viewpoint'].split(',')
@@ -4351,128 +4010,108 @@ if __name__ == "__main__":
                     raise
                 if not 0 <= float(vp[2]) % 360 <= 360:
                     raise
-                consistent_kwargs_dict['plot_viewpoint'] = [
-                    float(vp[0]), float(vp[1]), float(vp[2])]
+                consistent_kwargs_dict['plot_viewpoint'] = \
+                    [float(vp[0]), float(vp[1]), float(vp[2])]
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_projection']:
             lo_allowed_projections = ['stereo', 'ortho', 'lambert']  # ,'gnom']
-            do_allowed_projections = dict(
-                zip(('s', 'o', 'l', 'g'), ('stereo', 'ortho', 'lambert', 'gnom')))
+            do_allowed_projections = dict(zip(('s', 'o', 'l', 'g'),
+                                              ('stereo', 'ortho',
+                                               'lambert', 'gnom')))
             try:
-                if temp_dict['plot_projection'].lower() in lo_allowed_projections:
-                    consistent_kwargs_dict['plot_projection'] = temp_dict[
-                        'plot_projection'].lower()
-                elif temp_dict['plot_projection'].lower() in do_allowed_projections.keys():
-                    consistent_kwargs_dict['plot_projection'] = do_allowed_projections[
-                        temp_dict['plot_projection'].lower()]
+                ppl = temp_dict['plot_projection'].lower()
+                if ppl in lo_allowed_projections:
+                    consistent_kwargs_dict['plot_projection'] = ppl
+                elif ppl in do_allowed_projections.keys():
+                    consistent_kwargs_dict['plot_projection'] = \
+                        do_allowed_projections[ppl]
                 else:
                     consistent_kwargs_dict['plot_projection'] = 'stereo'
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_show_upper_hemis']:
             consistent_kwargs_dict['plot_show_upper_hemis'] = True
 
-        #
-        #
         if temp_dict['plot_n_points']:
             try:
                 if temp_dict['plot_n_points'] > 360:
-                    consistent_kwargs_dict['plot_n_points'] = int(
-                        temp_dict['plot_n_points'])
+                    consistent_kwargs_dict['plot_n_points'] = \
+                        int(temp_dict['plot_n_points'])
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_size']:
             try:
                 if 0.01 < temp_dict['plot_size'] <= 1:
-                    consistent_kwargs_dict[
-                        'plot_size'] = temp_dict['plot_size'] * 10 / 2.54
+                    consistent_kwargs_dict['plot_size'] = \
+                        temp_dict['plot_size'] * 10 / 2.54
                 elif 1 < temp_dict['plot_size'] < 45:
-                    consistent_kwargs_dict[
-                        'plot_size'] = temp_dict['plot_size'] / 2.54
+                    consistent_kwargs_dict['plot_size'] = \
+                        temp_dict['plot_size'] / 2.54
                 else:
                     consistent_kwargs_dict['plot_size'] = 5
-
-                #
-                #
-                consistent_kwargs_dict[
-                    'plot_aux_plot_size'] = consistent_kwargs_dict['plot_size']
-
+                consistent_kwargs_dict['plot_aux_plot_size'] = \
+                    consistent_kwargs_dict['plot_size']
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_pressure_colour']:
             try:
                 sec_colour_raw = temp_dict['plot_pressure_colour'].split(',')
                 if len(sec_colour_raw) == 1:
                     if sec_colour_raw[0].lower()[0] in list('bgrcmykw'):
-                        consistent_kwargs_dict[
-                            'plot_pressure_colour'] = sec_colour_raw[0].lower()[0]
+                        consistent_kwargs_dict['plot_pressure_colour'] = \
+                            sec_colour_raw[0].lower()[0]
                     else:
                         raise
                 elif len(sec_colour_raw) == 3:
                     for sc in sec_colour_raw:
                         if not 0 <= (int(sc)) <= 255:
                             raise
-                    consistent_kwargs_dict['plot_pressure_colour'] = (
-                        float(sec_colour_raw[0]) / 255., float(sec_colour_raw[1]) / 255., float(sec_colour_raw[2]) / 255.)
-
+                    consistent_kwargs_dict['plot_pressure_colour'] = \
+                        (float(sec_colour_raw[0]) / 255.,
+                         float(sec_colour_raw[1]) / 255.,
+                         float(sec_colour_raw[2]) / 255.)
                 else:
                     raise
-
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_tension_colour']:
             try:
                 sec_colour_raw = temp_dict['plot_tension_colour'].split(',')
                 if len(sec_colour_raw) == 1:
                     if sec_colour_raw[0].lower()[0] in list('bgrcmykw'):
-                        consistent_kwargs_dict[
-                            'plot_tension_colour'] = sec_colour_raw[0].lower()[0]
+                        consistent_kwargs_dict['plot_tension_colour'] = \
+                            sec_colour_raw[0].lower()[0]
                     else:
                         raise
                 elif len(sec_colour_raw) == 3:
                     for sc in sec_colour_raw:
                         if not 0 <= (int(float(sc))) <= 255:
                             raise
-
-                    consistent_kwargs_dict['plot_tension_colour'] = (
-                        float(sec_colour_raw[0]) / 255., float(sec_colour_raw[1]) / 255., float(sec_colour_raw[2]) / 255.)
-
+                    consistent_kwargs_dict['plot_tension_colour'] = \
+                        (float(sec_colour_raw[0]) / 255.,
+                         float(sec_colour_raw[1]) / 255.,
+                         float(sec_colour_raw[2]) / 255.)
                 else:
                     raise
-
             except:
                 pass
-        #
-        #
+
         if temp_dict['plot_total_alpha']:
             try:
                 if not 0 <= float(temp_dict['plot_total_alpha']) <= 1:
                     consistent_kwargs_dict['plot_total_alpha'] = 1
                 else:
-                    consistent_kwargs_dict['plot_total_alpha'] = float(
-                        temp_dict['plot_total_alpha'])
-
+                    consistent_kwargs_dict['plot_total_alpha'] = \
+                        float(temp_dict['plot_total_alpha'])
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_show_1faultplane']:
             consistent_kwargs_dict['plot_show_1faultplane'] = True
             try:
@@ -4481,114 +4120,101 @@ if __name__ == "__main__":
                 if not int(fp_args[0]) in [1, 2]:
                     consistent_kwargs_dict['plot_show_FP_index'] = 1
                 else:
-                    consistent_kwargs_dict[
-                        'plot_show_FP_index'] = int(fp_args[0])
+                    consistent_kwargs_dict['plot_show_FP_index'] = \
+                        int(fp_args[0])
 
                 if not 0 < float(fp_args[1]) <= 20:
                     consistent_kwargs_dict['plot_faultplane_width'] = 2
                 else:
-                    consistent_kwargs_dict[
-                        'plot_faultplane_width'] = float(fp_args[1])
+                    consistent_kwargs_dict['plot_faultplane_width'] = \
+                        float(fp_args[1])
 
                 try:
                     sec_colour_raw = fp_args[2].split(',')
                     if len(sec_colour_raw) == 1:
                         if sec_colour_raw[0].lower()[0] in list('bgrcmykw'):
-                            consistent_kwargs_dict[
-                                'plot_faultplane_colour'] = sec_colour_raw[0].lower()[0]
+                            consistent_kwargs_dict['plot_faultplane_colour'] =\
+                                sec_colour_raw[0].lower()[0]
                         else:
                             raise
                     elif len(sec_colour_raw) == 3:
                         for sc in sec_colour_raw:
                             if not 0 <= (int(sc)) <= 255:
                                 raise
-                        consistent_kwargs_dict['plot_faultplane_colour'] = (
-                            float(sec_colour_raw[0]) / 255., float(sec_colour_raw[1]) / 255., float(sec_colour_raw[2]) / 255.)
-
+                        consistent_kwargs_dict['plot_faultplane_colour'] = \
+                            (float(sec_colour_raw[0]) / 255.,
+                             float(sec_colour_raw[1]) / 255.,
+                             float(sec_colour_raw[2]) / 255.)
                     else:
                         raise
-
                 except:
                     consistent_kwargs_dict['plot_faultplane_colour'] = 'k'
 
                 try:
                     if 0 <= float(fp_args[3]) <= 1:
-                        consistent_kwargs_dict[
-                            'plot_faultplane_alpha'] = float(fp_args[3])
+                        consistent_kwargs_dict['plot_faultplane_alpha'] = \
+                            float(fp_args[3])
                 except:
                     consistent_kwargs_dict['plot_faultplane_alpha'] = 1
-
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_show_faultplanes']:
             consistent_kwargs_dict['plot_show_faultplanes'] = True
             consistent_kwargs_dict['plot_show_1faultplane'] = False
 
-        #
-        #
         if temp_dict['plot_dpi']:
             try:
                 if 200 <= int(temp_dict['plot_dpi']) <= 2000:
-                    consistent_kwargs_dict[
-                        'plot_dpi'] = int(temp_dict['plot_dpi'])
+                    consistent_kwargs_dict['plot_dpi'] = \
+                        int(temp_dict['plot_dpi'])
                 else:
                     raise
             except:
                 pass
 
-        #
-        #
         if temp_dict['plot_only_lines']:
             consistent_kwargs_dict['plot_fill_flag'] = False
 
-        #
-        #
         if temp_dict['plot_outerline']:
             consistent_kwargs_dict['plot_outerline'] = True
             try:
                 fp_args = temp_dict['plot_outerline']
-
                 if not 0 < float(fp_args[0]) <= 20:
                     consistent_kwargs_dict['plot_outerline_width'] = 2
                 else:
-                    consistent_kwargs_dict[
-                        'plot_outerline_width'] = float(fp_args[0])
-
+                    consistent_kwargs_dict['plot_outerline_width'] = \
+                        float(fp_args[0])
                 try:
                     sec_colour_raw = fp_args[1].split(',')
                     if len(sec_colour_raw) == 1:
                         if sec_colour_raw[0].lower()[0] in list('bgrcmykw'):
-                            consistent_kwargs_dict[
-                                'plot_outerline_colour'] = sec_colour_raw[0].lower()[0]
+                            consistent_kwargs_dict['plot_outerline_colour'] = \
+                                sec_colour_raw[0].lower()[0]
                         else:
                             raise
                     elif len(sec_colour_raw) == 3:
                         for sc in sec_colour_raw:
                             if not 0 <= (int(sc)) <= 255:
                                 raise
-                        consistent_kwargs_dict['plot_outerline_colour'] = (
-                            float(sec_colour_raw[0]) / 255., float(sec_colour_raw[1]) / 255., float(sec_colour_raw[2]) / 255.)
-
+                        consistent_kwargs_dict['plot_outerline_colour'] = \
+                            (float(sec_colour_raw[0]) / 255.,
+                             float(sec_colour_raw[1]) / 255.,
+                             float(sec_colour_raw[2]) / 255.)
                     else:
                         raise
-
                 except:
                     consistent_kwargs_dict['plot_outerline_colour'] = 'k'
 
                 try:
                     if 0 <= float(fp_args[2]) <= 1:
-                        consistent_kwargs_dict[
-                            'plot_outerline_alpha'] = float(fp_args[2])
+                        consistent_kwargs_dict['plot_outerline_alpha'] = \
+                            float(fp_args[2])
                 except:
                     consistent_kwargs_dict['plot_outerline_alpha'] = 1
-
             except:
                 pass
-        #
-        #
+
         if temp_dict['plot_nodalline']:
             consistent_kwargs_dict['plot_nodalline'] = True
             try:
@@ -4597,41 +4223,37 @@ if __name__ == "__main__":
                 if not 0 < float(fp_args[0]) <= 20:
                     consistent_kwargs_dict['plot_nodalline_width'] = 2
                 else:
-                    consistent_kwargs_dict[
-                        'plot_nodalline_width'] = float(fp_args[0])
-
+                    consistent_kwargs_dict['plot_nodalline_width'] = \
+                        float(fp_args[0])
                 try:
                     sec_colour_raw = fp_args[1].split(',')
                     if len(sec_colour_raw) == 1:
                         if sec_colour_raw[0].lower()[0] in list('bgrcmykw'):
-                            consistent_kwargs_dict[
-                                'plot_nodalline_colour'] = sec_colour_raw[0].lower()[0]
+                            consistent_kwargs_dict['plot_nodalline_colour'] = \
+                                sec_colour_raw[0].lower()[0]
                         else:
                             raise
                     elif len(sec_colour_raw) == 3:
                         for sc in sec_colour_raw:
                             if not 0 <= (int(sc)) <= 255:
                                 raise
-                        consistent_kwargs_dict['plot_nodalline_colour'] = (
-                            float(sec_colour_raw[0]) / 255., float(sec_colour_raw[1]) / 255., float(sec_colour_raw[2]) / 255.)
-
+                        consistent_kwargs_dict['plot_nodalline_colour'] = \
+                            (float(sec_colour_raw[0]) / 255.,
+                             float(sec_colour_raw[1]) / 255.,
+                             float(sec_colour_raw[2]) / 255.)
                     else:
                         raise
-
                 except:
                     consistent_kwargs_dict['plot_nodalline_colour'] = 'k'
-
                 try:
                     if 0 <= float(fp_args[2]) <= 1:
-                        consistent_kwargs_dict[
-                            'plot_nodalline_alpha'] = float(fp_args[2])
+                        consistent_kwargs_dict['plot_nodalline_alpha'] = \
+                            float(fp_args[2])
                 except:
                     consistent_kwargs_dict['plot_nodalline_alpha'] = 1
-
             except:
                 pass
-        #
-        #
+
         if temp_dict['plot_show_princ_axes']:
             consistent_kwargs_dict['plot_show_princ_axes'] = True
             try:
@@ -4640,22 +4262,20 @@ if __name__ == "__main__":
                 if not 0 < float(fp_args[0]) <= 40:
                     consistent_kwargs_dict['plot_princ_axes_symsize'] = 10
                 else:
-                    consistent_kwargs_dict[
-                        'plot_princ_axes_symsize'] = float(fp_args[0])
+                    consistent_kwargs_dict['plot_princ_axes_symsize'] = \
+                        float(fp_args[0])
 
                 if not 0 < float(fp_args[1]) <= 20:
                     consistent_kwargs_dict['plot_princ_axes_lw '] = 3
                 else:
-                    consistent_kwargs_dict[
-                        'plot_princ_axes_lw '] = float(fp_args[1])
-
+                    consistent_kwargs_dict['plot_princ_axes_lw '] = \
+                        float(fp_args[1])
                 try:
                     if 0 <= float(fp_args[2]) <= 1:
-                        consistent_kwargs_dict[
-                            'plot_princ_axes_alpha'] = float(fp_args[2])
+                        consistent_kwargs_dict['plot_princ_axes_alpha'] = \
+                            float(fp_args[2])
                 except:
                     consistent_kwargs_dict['plot_princ_axes_alpha'] = 1
-
             except:
                 pass
 
@@ -4663,18 +4283,19 @@ if __name__ == "__main__":
             consistent_kwargs_dict['plot_show_basis_axes'] = True
 
         if temp_dict['plot_input_system']:
+            lo_allowed_systems = ['XYZ', 'NED', 'USE', 'NWU']
             try:
-                if temp_dict['plot_input_system'][:3].upper() in lo_allowed_systems:
-                    consistent_kwargs_dict['in_system'] = temp_dict[
-                        'plot_input_system'][:3].upper()
+                tpis = temp_dict['plot_input_system'][:3].upper()
+                if tpis in lo_allowed_systems:
+                    consistent_kwargs_dict['in_system'] = tpis
                 else:
                     raise
             except:
                 pass
 
         if temp_dict['plot_isotropic_part']:
-            consistent_kwargs_dict[
-                'plot_isotropic_part'] = temp_dict['plot_isotropic_part']
+            consistent_kwargs_dict['plot_isotropic_part'] = \
+                temp_dict['plot_isotropic_part']
 
         return consistent_kwargs_dict
 
@@ -4690,13 +4311,16 @@ if __name__ == "__main__":
 
         return consistent_kwargs_dict
 
-    #------------------------------------------------------------------
     def _parse_arguments(main_call, its_arguments, optparser):
-
+        """
+        """
+        # todo:
+        # print '\n', main_call,its_arguments,'\n'
         (options, args) = optparser.parse_args(its_arguments)
 
-        # TODO check: if arguments do not start with "-" - if so, there is a
-        # lack of arguments for the previous option
+        # todo
+        # check, if arguments do not start with "-" - if so, there is a lack of
+        # arguments for the previous option
         for val2check in options.__dict__.values():
             if str(val2check).startswith('-'):
                 try:
@@ -4704,8 +4328,8 @@ if __name__ == "__main__":
                     for ii in val2check_split:
                         float(ii)
                 except:
-                    sys.exit(
-                        '\n   ERROR - check carefully number of arguments for all options\n')
+                    sys.exit('ERROR - check carefully number of arguments ' +
+                             'for all options\n')
 
         if main_call == 'plot':
             consistent_kwargs_dict = _build_plot_dict(options, optparser)
@@ -4728,7 +4352,8 @@ if __name__ == "__main__":
                                 dest='in_system',
                                 metavar='<basis>',
                                 default='NED',
-                                help='''Define the coordinate system of the source mechanism [Default: NED].
+                                help='''
+Define the coordinate system of the source mechanism [Default: NED].
 
 Available coordinate systems:
 
@@ -4736,21 +4361,19 @@ Available coordinate systems:
     * USE: Up, South, East    (Global CMT)
     * XYZ: East, North, Up    (Jost and Herrmann)
     * NWU: North, West, Up    (Stein and Wysession)
-''')
+'''.lstrip())
 
         group_system.add_option('-o', '--output-system',
                                 action="store",
                                 dest='out_system',
                                 metavar='<basis>',
                                 default='NED',
-                                help="Define the coordinate system of the output. See '--input-system' for a list of available coordinate systems [Default: NED].")
+                                help='''
+Define the coordinate system of the output. See '--input-system' for a list of
+available coordinate systems [Default: NED].'''.lstrip())
 
         parent.add_option_group(group_system)
 
-    #------------------------------------------------------------------
-    # build dictionary with 4 (5 incl. 'save') sets of options, belonging to the 4 (5) possible calls
-    #
-    #
     def _build_optparsers():
 
         _do_parsers = {}
@@ -4762,20 +4385,23 @@ This tool produces output which can be fed into the GMT command `psxy`. The
 output consists of coordinates which describe the lines of the beachball in
 standard cartesian coordinates, centered at zero.
 
-In order to generate a beachball diagram, this tool has to be called twice
-with different arguments of the --type option. First to define the colored areas
+In order to generate a beachball diagram, this tool has to be called twice with
+different arguments of the --type option. First to define the colored areas
 (--type=fill) and second for the nodal and border lines (--type=lines).
 
 Example:
 
-    mopad gmt 30,60,90 --type=fill | psxy -Jx4/4 -R-2/2/-2/2 -P -Cpsxy_fill.cpt -M -L -K > out.ps
+    mopad gmt 30,60,90 --type=fill | \
+psxy -Jx4/4 -R-2/2/-2/2 -P -Cpsxy_fill.cpt -M -L -K > out.ps
 
-    mopad gmt 30,60,90 --type=lines | psxy -Jx4/4 -R-2/2/-2/2 -P -Cpsxy_lines.cpt -W2p -P -M -O >> out.ps
+    mopad gmt 30,60,90 --type=lines | \
+psxy -Jx4/4 -R-2/2/-2/2 -P -Cpsxy_lines.cpt -W2p -P -M -O >> out.ps
 
 """
 
         parser_gmt = OptionParser(
-            usage="mopad.py gmt <source-mechanism> [options]", description=desc, formatter=MopadHelpFormatter())
+            usage='mopad.py gmt <source-mechanism> [options]',
+            description=desc, formatter=MopadHelpFormatter())
 
         group_type = OptionGroup(parser_gmt, 'Output')
         group_show = OptionGroup(parser_gmt, 'Appearance')
@@ -4786,7 +4412,9 @@ Example:
                               dest='GMT_string_type',
                               action='store',
                               default='fill',
-                              help='Chosing the respective psxy data set: area to fill (fill), nodal lines (lines), or eigenvector positions (ev) [Default: fill]',
+                              help='Chosing the respective psxy data set: '
+                              'area to fill (fill), nodal lines (lines), '
+                              'or eigenvector positions (ev) [Default: fill]',
                               metavar='<type>')
 
         group_show.add_option('-s', '--scaling',
@@ -4795,26 +4423,32 @@ Example:
                               default='1',
                               type='float',
                               metavar='<scaling factor>',
-                              help='Spatial scaling factor of the beachball [Default: 1]')
+                              help='Spatial scaling factor of the beachball '
+                              '[Default: 1]')
         group_show.add_option('-r', '--colour1',
                               dest='GMT_tension_colour',
                               type='int',
                               action='store',
                               metavar='<tension colour>',
                               default='1',
-                              help="-Z option's key (see help for 'psxy') for the tension colour of the beachball - type: integer [Default: 1]")
+                              help="-Z option's key (see help for 'psxy') "
+                              'for the tension colour of the beachball - '
+                              'type: integer [Default: 1]')
         group_show.add_option('-w', '--colour2',
                               dest='GMT_pressure_colour',
                               type='int',
                               action='store',
                               metavar='<pressure colour>',
                               default='0',
-                              help="-Z option's key (see help for 'psxy') for the pressure colour of the beachball - type: integer [Default: 0]")
+                              help="-Z option's key (see help for 'psxy') "
+                              'for the pressure colour of the beachball - '
+                              'type: integer [Default: 0]')
         group_show.add_option('-D', '--faultplanes',
                               dest='GMT_show_2FP2',
                               action='store_true',
                               default=False,
-                              help='Key, if 2 faultplanes shall be shown [Default: deactivated]')
+                              help='Key, if 2 faultplanes shall be shown '
+                              '[Default: deactivated]')
         group_show.add_option('-d', '--show_1fp',
                               type='choice',
                               dest='GMT_show_1FP',
@@ -4822,24 +4456,30 @@ Example:
                               metavar='<FP index>',
                               action='store',
                               default=False,
-                              help='Key for plotting 1 specific faultplane - value: 1,2 [Default: None]')
+                              help='Key for plotting 1 specific faultplane - '
+                              'value: 1,2 [Default: None]')
         group_geo.add_option('-v', '--viewpoint',
-                             action="store",
+                             action='store',
                              dest='plot_viewpoint',
                              metavar='<lat,lon,azi>',
                              default=None,
-                             help='Coordinates (in degrees) of the viewpoint onto the projection - type: comma separated 3-tuple [Default: None]')
+                             help='Coordinates (in degrees) of the viewpoint '
+                             'onto the projection - type: comma separated '
+                             '3-tuple [Default: None]')
         group_geo.add_option('-p', '--projection',
-                             action="store",
+                             action='store',
                              dest='GMT_projection',
                              metavar='<projection>',
                              default=None,
-                             help='Two-dimensional projection of the sphere - value: (s)tereographic, (l)ambert, (o)rthographic [Default: (s)tereographic]')
+                             help='Two-dimensional projection of the sphere - '
+                             'value: (s)tereographic, (l)ambert, '
+                             '(o)rthographic [Default: (s)tereographic]')
         group_show.add_option('-I', '--show_isotropic_part',
                               dest='GMT_plot_isotropic_part',
                               action='store_true',
                               default=False,
-                              help='Key for considering the isotropic part for plotting [Default: deactivated]')
+                              help='Key for considering the isotropic part '
+                              'for plotting [Default: deactivated]')
 
         parser_gmt.add_option_group(group_type)
         parser_gmt.add_option_group(group_show)
@@ -4854,10 +4494,12 @@ Example:
         Several styles and configurations are available. Also saving
         on the fly can be enabled.
         ONLY THE DEVIATORIC COMPONENT WILL BE PLOTTED by default;
-        for including the isotropic part, use the '--show_isotropic_part' option!
+        for including the isotropic part, use the '--show_isotropic_part'
+        option!
         """
         parser_plot = OptionParser(
-            usage="mopad.py plot <source-mechanism> [options]", description=desc_plot, formatter=MopadHelpFormatter())
+            usage="mopad.py plot <source-mechanism> [options]",
+            description=desc_plot, formatter=MopadHelpFormatter())
 
         group_save = OptionGroup(parser_plot, 'Saving')
         group_type = OptionGroup(parser_plot, 'Type of plot')
@@ -4874,46 +4516,55 @@ Example:
                               metavar='<filename>',
                               default=None,
                               nargs=1,
-                              help='(Absolute) filename for saving [Default: None]')
+                              help='(Absolute) filename for saving '
+                              '[Default: None]')
 
         group_type.add_option('-E', '--eigen_system',
                               action="store_true",
                               dest='plot_pa_plot',
                               default=False,
-                              help='Key for plotting principal axis system/eigensystem [Default: deactivated]')
+                              help='Key for plotting principal axis '
+                              'system/eigensystem [Default: deactivated]')
 
         group_type.add_option('-O', '--full_sphere',
                               action="store_true",
                               dest='plot_full_sphere',
                               default=False,
-                              help='Key for plotting the full sphere [Default: deactivated]')
+                              help='Key for plotting the full sphere '
+                              '[Default: deactivated]')
 
         group_type.add_option('-P', '--partial',
                               action="store",
                               dest='plot_part_of_m',
                               metavar='<part of M>',
                               default=None,
-                              help='Key for plotting only a specific part of M - values: iso,devi,dc,clvd [Default: None] ')
+                              help='Key for plotting only a specific part of '
+                              'M - values: iso,devi,dc,clvd [Default: None] ')
 
         group_geo.add_option('-v', '--viewpoint',
                              action="store",
                              dest='plot_viewpoint',
                              metavar='<lat,lon,azi>',
                              default=None,
-                             help='Coordinates (in degrees) of the viewpoint onto the projection - type: comma separated 3-tuple [Default: None]')
+                             help='Coordinates (in degrees) of the viewpoint '
+                             'onto the projection - type: comma separated '
+                             '3-tuple [Default: None]')
 
         group_geo.add_option('-p', '--projection',
                              action="store",
                              dest='plot_projection',
                              metavar='<projection>',
                              default=None,
-                             help='Two-dimensional projection of the sphere - value: (s)tereographic, (l)ambert, (o)rthographic [Default: (s)tereographic]')
+                             help='Two-dimensional projection of the sphere '
+                             '- value: (s)tereographic, (l)ambert, '
+                             '(o)rthographic [Default: (s)tereographic]')
 
         group_type.add_option('-U', '--upper',
                               action="store_true",
                               dest='plot_show_upper_hemis',
                               default=False,
-                              help='Key for plotting the upper hemisphere [Default: deactivated]')
+                              help='Key for plotting the upper hemisphere '
+                              '[Default: deactivated]')
 
         group_quality.add_option('-N', '--points',
                                  action="store",
@@ -4921,7 +4572,8 @@ Example:
                                  dest='plot_n_points',
                                  type="int",
                                  default=None,
-                                 help='Minimum number of points, used for nodal lines [Default: None]')
+                                 help='Minimum number of points, used for '
+                                 'nodal lines [Default: None]')
 
         group_app.add_option('-s', '--size',
                              action="store",
@@ -4929,21 +4581,26 @@ Example:
                              metavar='<size in cm>',
                              type="float",
                              default=None,
-                             help='Size of plot (diameter) in cm [Default: None]')
+                             help='Size of plot (diameter) in cm '
+                             '[Default: None]')
 
         group_colours.add_option('-w', '--pressure_colour',
                                  action="store",
                                  dest='plot_pressure_colour',
                                  metavar='<colour>',
                                  default=None,
-                                 help='Colour of the tension area - values: comma separated RGB 3-tuples OR MATLAB conform colour names [Default: None]')
+                                 help='Colour of the tension area - values: '
+                                 'comma separated RGB 3-tuples OR MATLAB '
+                                 'conform colour names [Default: None]')
 
         group_colours.add_option('-r', '--tension_colour',
                                  action="store",
                                  dest='plot_tension_colour',
                                  metavar='<colour>',
                                  default=None,
-                                 help='Colour of the pressure area values: comma separated RGB 3-tuples OR MATLAB conform colour names [Default: None]')
+                                 help='Colour of the pressure area values: '
+                                 'comma separated RGB 3-tuples OR MATLAB '
+                                 'conform colour names [Default: None]')
 
         group_app.add_option('-a', '--alpha',
                              action="store",
@@ -4951,13 +4608,16 @@ Example:
                              metavar='<alpha>',
                              type='float',
                              default=None,
-                             help='Alpha value for the total plot - value: float between 1=opaque to 0=transparent [Default: None]')
+                             help='Alpha value for the total plot - value: '
+                             'float between 1=opaque to 0=transparent '
+                             '[Default: None]')
 
         group_dc.add_option('-D', '--dc',
                             action="store_true",
                             dest='plot_show_faultplanes',
                             default=False,
-                            help='Key for plotting both double couple faultplanes (blue) [Default: deactivated]')
+                            help='Key for plotting both double couple '
+                            'faultplanes (blue) [Default: deactivated]')
 
         group_dc.add_option('-d', '--show1fp',
                             action="store",
@@ -4965,7 +4625,11 @@ Example:
                             dest='plot_show_1faultplane',
                             default=None,
                             nargs=4,
-                            help='Key for plotting 1 specific faultplane - 4 arguments as space separated list - index values: 1,2, linewidth value: float, line colour value: string or RGB-3-tuple, alpha value: float between 0 and 1 [Default: None] ')
+                            help='Key for plotting 1 specific faultplane - '
+                            '4 arguments as space separated list - '
+                            'index values: 1,2, linewidth value: float, '
+                            'line colour value: string or RGB-3-tuple, alpha '
+                            'value: float between 0 and 1 [Default: None] ')
 
         group_misc.add_option('-e', '--eigenvectors',
                               action="store",
@@ -4973,13 +4637,18 @@ Example:
                               metavar='<size> <linewidth> <alpha>',
                               default=None,
                               nargs=3,
-                              help='Key for showing eigenvectors - 3 arguments as space separated list - symbol size value: float, symbol linewidth value: float, symbol alpha value: float between 0 and 1 [Default: None]')
+                              help='Key for showing eigenvectors - '
+                              '3 arguments as space separated list - symbol '
+                              'size value: float, symbol linewidth value: '
+                              'float, symbol alpha value: float between 0 '
+                              'and 1 [Default: None]')
 
         group_misc.add_option('-b', '--basis_vectors',
                               action="store_true",
                               dest='plot_show_basis_axes',
                               default=False,
-                              help='Key for showing NED basis axes in plot [Default: deactivated]')
+                              help='Key for showing NED basis axes in plot '
+                              '[Default: deactivated]')
 
         group_app.add_option('-l', '--lines',
                              action="store",
@@ -4987,7 +4656,11 @@ Example:
                              metavar='<linewidth> <colour> <alpha>',
                              nargs=3,
                              default=None,
-                             help='Define the style of the outer line - 3 arguments as space separated list - linewidth value: float, line colour value: string or RGB-3-tuple), alpha value: float between 0 and 1 [Default: None]')
+                             help='Define the style of the outer line - '
+                             '3 arguments as space separated list - '
+                             'linewidth value: float, line colour value: '
+                             'string or RGB-3-tuple), alpha value: float '
+                             'between 0 and 1 [Default: None]')
 
         group_app.add_option('-n', '--nodals',
                              action="store",
@@ -4995,7 +4668,11 @@ Example:
                              metavar='<linewidth> <colour> <alpha>',
                              default=None,
                              nargs=3,
-                             help='Define the style of the nodal lines - 3 arguments as space separated list - linewidth value: float, line colour value: string or RGB-3-tuple), alpha value: float between 0 and 1 [Default: None]')
+                             help='Define the style of the nodal lines - 3 '
+                             'arguments as space separated list - linewidth '
+                             'value: float, line colour value: string or '
+                             'RGB-3-tuple), alpha value: float between 0 and '
+                             '1 [Default: None]')
 
         group_quality.add_option('-Q', '--quality',
                                  action="store",
@@ -5003,26 +4680,32 @@ Example:
                                  metavar='<dpi>',
                                  type="int",
                                  default=None,
-                                 help='Set the quality for the plot in terms of dpi (minimum=200) [Default: None] ')
+                                 help='Set the quality for the plot in '
+                                 'terms of dpi (minimum=200) [Default: None] ')
 
         group_type.add_option('-L', '--lines_only',
                               action="store_true",
                               dest='plot_only_lines',
                               default=False,
-                              help='Key for plotting lines only (no filling - this overwrites all "fill"-related options) [Default: deactivated] ')
+                              help='Key for plotting lines only (no filling '
+                              '- this overwrites all "fill"-related options) '
+                              '[Default: deactivated] ')
 
         group_misc.add_option('-i', '--input-system',
                               action="store",
                               dest='plot_input_system',
                               metavar='<basis>',
                               default=False,
-                              help='Define the coordinate system of the source mechanism - value: NED,USE,XYZ,NWU [Default: NED]  ')
+                              help='Define the coordinate system of the '
+                              'source mechanism - value: NED,USE,XYZ,NWU '
+                              '[Default: NED]  ')
 
         group_type.add_option('-I', '--show_isotropic_part',
                               dest='plot_isotropic_part',
                               action='store_true',
                               default=False,
-                              help='Key for considering the isotropic part for plotting [Default: deactivated]')
+                              help='Key for considering the isotropic part '
+                              'for plotting [Default: deactivated]')
 
         parser_plot.add_option_group(group_save)
         parser_plot.add_option_group(group_type)
@@ -5035,12 +4718,13 @@ Example:
 
         _do_parsers['plot'] = parser_plot
 
-        desc_decomp  = """
+        desc_decomp = """
 Decompose moment tensor into additive contributions.
 
 This method implements four different decompositions following the conventions
 given by Jost & Herrmann (1998), and Dahm (1997). The type of decomposition can
-be selected with the '--type' option. Use the '--partial' option, if only parts of the full decomposition are required.
+be selected with the '--type' option. Use the '--partial' option, if only parts
+of the full decomposition are required.
 
 By default, the decomposition results are printed in the following order:
 
@@ -5076,7 +4760,8 @@ By default, the decomposition results are printed in the following order:
 """
 
         parser_decompose = OptionParser(
-            usage="mopad decompose <source-mechanism> [options]", description=desc_decomp, formatter=MopadHelpFormatter())
+            usage="mopad decompose <source-mechanism> [options]",
+            description=desc_decomp, formatter=MopadHelpFormatter())
 
         group_type = OptionGroup(
             parser_decompose, 'Type of decomposition')
@@ -5107,7 +4792,8 @@ printed [Default: None]. The following parts are available:
 Choose type of decomposition - values 1,2,3,4 \n[Default: 1]:
 
 %s
-''' % '\n'.join([ '    * %s - %s' % (k, v[0]) for (k, v) in MomentTensor.decomp_dict.items() ]) )
+''' % '\n'.join(['    * %s - %s' % (k, v[0]) for (k, v)
+                 in MomentTensor.decomp_dict.items()]))
 
         parser_decompose.add_option_group(group_type)
         parser_decompose.add_option_group(group_part)
@@ -5122,10 +4808,8 @@ Print the detailed description of a source mechanism
 
 
 For a given source mechanism, orientations of the fault planes, moment,
-magnitude, and moment tensor are printed. Input and output coordinate basis systems
-can be specified.
-''',
-
+magnitude, and moment tensor are printed. Input and output coordinate basis
+systems can be specified.'''.lstrip(),
             formatter=MopadHelpFormatter())
 
         _add_group_system(parser_describe)
@@ -5134,8 +4818,6 @@ can be specified.
 
         return _do_parsers
 
-    #------------------------------------------------------------------
-    #------------------------------------------------------------------
     if len(sys.argv) < 2:
         call = 'help'
 
@@ -5177,9 +4859,9 @@ Available methods:
    * gmt:        output beachball representation in a format suitable for
                  plotting with GMT
 
-The source-mechanism is given as a comma separated list (NO BLANK SPACES!) of values
-which is interpreted differently, according to the number of values in the list. The
-following source-mechanism representations are available:
+The source-mechanism is given as a comma separated list (NO BLANK SPACES!) of
+values which is interpreted differently, according to the number of values in
+the list. The following source-mechanism representations are available:
 
    * strike,dip,rake
    * strike,dip,rake,moment
@@ -5187,9 +4869,9 @@ following source-mechanism representations are available:
    * M11,M22,M33,M12,M13,M23,moment
    * M11,M12,M13,M21,M22,M23,M31,M32,M33
 
-Angles are given in degrees, moment tensor components and scalar moment are given
-in [Nm] for a coordinate system with axes pointing North, East, and Down by
-default.
+Angles are given in degrees, moment tensor components and scalar moment are
+given in [Nm] for a coordinate system with axes pointing North, East, and Down
+by default.
 _______________________________________________________________________________
 
 EXAMPLES
@@ -5198,8 +4880,8 @@ EXAMPLES
 'plot' :
 --
 To generate the "beachball" representation of a pure normal faulting event with
-a strike angle of 0 degrees and a dip of 45 degrees, use either of the following
-commands:
+a strike angle of 0 degrees and a dip of 45 degrees, use either of the
+following commands:
 
   mopad plot 0,45,-90
 
@@ -5209,21 +4891,21 @@ commands:
 'describe':
 --
 To see the seismic moment tensor entries (in GlobalCMT's USE basis) and the
-orientation of the auxilliary plane for a shear crack with the (strike,dip,slip-rake)
-tuple (90,45,45) use:
+orientation of the auxilliary plane for a shear crack with the
+(strike,dip,slip-rake) tuple (90,45,45) use:
 
   mopad describe 90,45,45 -o USE
 
 
 'decompose':
 --
-Get the deviatoric part of a seismic moment tensor M=(1,2,3,4,5,6) together with
-the respective double-couple- and CLVD-components by using:
+Get the deviatoric part of a seismic moment tensor M=(1,2,3,4,5,6) together
+with the respective double-couple- and CLVD-components by using:
 
   mopad decompose 1,2,3,4,5,6 -p devi,dc,clvd
 
 
-""" % (mopad_version)
+""" % (MOPAD_VERSION)
 
         print helpstring
 
@@ -5249,7 +4931,5 @@ the respective double-couple- and CLVD-components by using:
         sys.exit()
 
     aa = _handle_input(call, M_raw, sys.argv[3:], _build_optparsers()[call])
-    if aa != None:
+    if aa is not None:
         print aa
-#------------------------------------------------------------------
-# finished
