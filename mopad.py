@@ -38,7 +38,6 @@ def wrap(text, line_length=80):
 
     det_indent = re.compile(r'^ *')
 
-    iso_latin_1_enc_failed = False
     outlines = []
     for ip, p in enumerate(paragraphs):
         if not p:
@@ -129,7 +128,6 @@ class MopadHelpFormatter(optparse.IndentedHelpFormatter):
         if not description:
             return ""
         desc_width = self.width - self.current_indent
-        indent = " " * self.current_indent
         return '\n'.join(wrap(description, desc_width)) + "\n"
 
 
@@ -398,12 +396,12 @@ class MomentTensor:
 
         # eigenvalues in ascending order in absolute value!!:
         eigenw_devi = np.real(np.take(eigenw1, np.argsort(abs(eigenw1))))
-        eigenv_devi = np.real(np.take(eigenv1, np.argsort(abs(eigenw1)), 1))
+        #eigenv_devi = np.real(np.take(eigenv1, np.argsort(abs(eigenw1)), 1))
 
         M0_devi = max(abs(eigenw_devi))
 
         # named according to Jost & Herrmann:
-        a1 = eigenv[:, 0]
+        #a1 = eigenv[:, 0]
         a2 = eigenv[:, 1]
         a3 = eigenv[:, 2]
 
@@ -527,7 +525,7 @@ class MomentTensor:
                       1. / 3 * np.trace(M),
                       1. / 3 * np.trace(M)]))
 
-        M0_iso = abs(1. / 3 * np.trace(M))
+        #M0_iso = abs(1. / 3 * np.trace(M))
 
         # deviatoric part
         M_devi = M - M_iso
@@ -556,9 +554,6 @@ class MomentTensor:
         self._DC1 = M_DC1
         self._DC2 = M_DC2
 
-        self._DC_percentage = M_DC1_perc
-        self._DC2_percentage = M_DC2_perc
-
         # according to Bowers & Hudson:
         eigvals_M, dummy_vecs = np.linalg.eig(M)
         eigvals_M_devi, dummy_vecs = np.linalg.eig(M_devi)
@@ -576,20 +571,15 @@ class MomentTensor:
             np.abs(eigvals_M_dc1 - 1. / 3 * np.sum(eigvals_M)))
         M0_M_dc2 = np.max(
             np.abs(eigvals_M_dc2 - 1. / 3 * np.sum(eigvals_M)))
+
         M0_M_dc = M0_M_dc1 + M0_M_dc2
         M0_M_devi = M0_M_clvd + M0_M_dc
-
         M0_M = M0_M_iso + M0_M_devi
 
-        M_iso_percentage = int(M0_M_iso / M0_M * 100)
-        self._iso_percentage = M_iso_percentage
-
-        M_DC_percentage = int(M0_M_dc / M0_M * 100)
-        self._dc_percentage = M_dc_percentage
-        M_DC1_percentage = int(M0_M_dc1 / M0_M * 100)
-        self._dc1_percentage = M_dc_percentage
-        M_DC2_percentage = int(M0_M_dc2 / M0_M * 100)
-        self._dc2_percentage = M_dc_percentage
+        self._iso_percentage = int(M0_M_iso / M0_M * 100)
+        self._DC_percentage = int(M0_M_dc / M0_M * 100)
+        self._DC1_percentage = int(M0_M_dc1 / M0_M * 100)
+        self._DC2_percentage = int(M0_M_dc2 / M0_M * 100)
 
         #self._seismic_moment   = np.sqrt(1./2*np.sum(eigenw**2) )
         self._seismic_moment = M0_M
@@ -1497,7 +1487,6 @@ class MomentTensor:
         Returns the value of the plotting order (only important in BeachBall
         instances).
         """
-        style = kwargs.get('style', '0')[0].lower()
         return self._plot_clr_order
 
 MomentTensor.decomp_dict = {
@@ -3596,8 +3585,6 @@ class BeachBall:
 
 if __name__ == "__main__":
 
-    import os
-    import os.path as op
     from optparse import OptionParser, OptionGroup
 
     decomp_attrib_map_keys = ('in', 'out', 'type',
