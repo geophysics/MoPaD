@@ -2311,7 +2311,10 @@ class BeachBall:
             except:
                 print 'saving of plot not possible'
 
-        P.show()
+        try:
+            P.show(block=True)
+        except:
+            P.show()
 
         del P
         del matplotlib
@@ -2390,7 +2393,10 @@ class BeachBall:
             except:
                 print 'saving of plot not possible'
 
-        P.show()
+        try:
+            P.show(block=True)
+        except:
+            P.show()
 
 
         del P
@@ -3716,7 +3722,11 @@ class BeachBall:
             except:
                 print 'saving of plot not possible'
 
-        P.show()
+        try:
+            P.show(block=True)
+        except:
+            P.show()
+
 
         P.close('all')
         del P
